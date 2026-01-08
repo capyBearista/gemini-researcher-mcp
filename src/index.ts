@@ -20,9 +20,10 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { PROTOCOL, SERVER_INFO, LOG_PREFIX } from "./constants.js";
+import { PROTOCOL, SERVER_INFO, LOG_PREFIX, WIZARD_MESSAGES } from "./constants.js";
 import type { ToolArguments } from "./types.js";
 import { getToolDefinitions, executeTool, toolExists } from "./tools/index.js";
+import { runSetupWizard, validateEnvironment } from "./setup/index.js";
 
 // ============================================================================
 // Server Instance
@@ -318,10 +319,46 @@ server.setRequestHandler(
 // ============================================================================
 
 /**
+ * Handle the 'init' command (setup wizard)
+ */
+async function handleInitCommand(): Promise<void> {
+  const success = await runSetupWizard();
+  process.exit(success ? 0 : 1);
+}
+
+/**
+ * Perform startup validation
+ * Checks that Gemini CLI is installed and authentication is configured
+ */
+async function performStartupValidation(): Promise<boolean> {
+  const result = await validateEnvironment();
+  
+  if (!result.valid) {
+    console.error(result.error);
+    return false;
+  }
+  
+  logInfo(WIZARD_MESSAGES.STARTUP_SUCCESS);
+  return true;
+}
+
+/**
  * Main entry point
  * Initializes the MCP server with stdio transport
  */
 async function main(): Promise<void> {
+  // Check for 'init' command
+  if (process.argv.includes("init")) {
+    await handleInitCommand();
+    return;
+  }
+
+  // Perform startup validation
+  const isValid = await performStartupValidation();
+  if (!isValid) {
+    process.exit(1);
+  }
+
   logInfo(`Initializing ${SERVER_INFO.NAME} v${SERVER_INFO.VERSION}`);
 
   // Create stdio transport
