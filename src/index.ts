@@ -121,11 +121,11 @@ function startProgressUpdates(
   latestOutput = "";
 
   const progressMessages = [
-    `🧠 ${operationName} - Gemini is analyzing your request...`,
-    `📊 ${operationName} - Processing files and generating insights...`,
-    `✨ ${operationName} - Creating structured response for your review...`,
-    `⏱️ ${operationName} - Large analysis in progress (this is normal for big requests)...`,
-    `🔍 ${operationName} - Still working... Gemini takes time for quality results...`,
+    `${operationName} - Gemini is analyzing your request...`,
+    `${operationName} - Processing files and generating insights...`,
+    `${operationName} - Creating structured response for your review...`,
+    `${operationName} - Large analysis in progress (this is normal for big requests)...`,
+    `${operationName} - Still working... Gemini takes time for quality results...`,
   ];
 
   let messageIndex = 0;
@@ -137,7 +137,7 @@ function startProgressUpdates(
       progressToken,
       0,
       undefined, // No total - indeterminate progress
-      `🔍 Starting ${operationName}`
+      `Starting ${operationName}`
     );
   }
 
@@ -150,7 +150,7 @@ function startProgressUpdates(
       const baseMessage = progressMessages[messageIndex % progressMessages.length];
       const outputPreview = latestOutput.slice(-150).trim();
       const message = outputPreview
-        ? `${baseMessage}\n📝 Output: ...${outputPreview}`
+        ? `${baseMessage}\nOutput: ...${outputPreview}`
         : baseMessage;
 
       await sendProgressNotification(

@@ -30,23 +30,23 @@
     "copilot",
     "claude"
   ],
-  "author": "",
-  "license": "MIT",
+  "author": "capyBearista",
+  "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_ORG/better-gemini-mcp.git"
+    "url": "https://github.com/capyBearista/better-gemini-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR_ORG/better-gemini-mcp/issues"
+    "url": "https://github.com/capyBearista/better-gemini-mcp/issues"
   },
-  "homepage": "https://github.com/YOUR_ORG/better-gemini-mcp#readme",
+  "homepage": "https://github.com/capyBearista/better-gemini-mcp#readme",
   "engines": {
     "node": ">=18.0.0"
   },
   "files": [
     "dist/",
     "README.md",
-    "LICENSE",
+    "LICENSE.md",
     "CHANGELOG.md"
   ],
   "dependencies": {

@@ -1,405 +1,249 @@
 # Better Gemini MCP
 
-[![npm version](https://badge.fury.io/js/better-gemini-mcp.svg)](https://www.npmjs.com/package/better-gemini-mcp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/node/v/better-gemini-mcp.svg)](https://nodejs.org)
+A lightweight, stateless MCP (Model Context Protocol) server that lets developer agents (Claude Code, GitHub Copilot) delegate deep repository analysis to the Gemini CLI. The server is read-only, returns structured JSON, and is optimized to reduce the calling agent's context and model usage.
 
-A **stateless MCP (Model Context Protocol) server** that acts as a lightweight research proxy for developer agents (Claude Code, VS Code Copilot), leveraging the large context window of **Gemini CLI** to analyze local codebases and documents without consuming the calling agent's context window.
+**Status:** v1 complete. Core features are stable, but still early days. Feedback welcome!
 
-## 🎯 Why Better Gemini MCP?
+**Primary goals:**
+- Reduce agent context usage by letting Gemini CLI read large codebases locally and do its own research
+- Reduce calling-agent model usage by offloading heavy analysis to Gemini
+- Keep the server stateless and read-only for safety
 
-When using AI coding assistants like Claude Code or GitHub Copilot, you often need to:
-- Analyze large files or multiple files at once
-- Understand complex codebases across many modules
-- Get deep insights without pasting everything into chat
+**Quick links:**
+- Product requirements doc: [docs/project-overview-PRD.md](docs/project-overview-PRD.md)
 
-**Better Gemini MCP** offloads this heavy lifting to Gemini CLI's large context window, so your primary agent stays focused and efficient.
+**Verified clients:** Claude Code, VS Code (GitHub Copilot), Cursor
 
-### Key Benefits
+**Important constraints:** stateless, read-only (no code patches), server-owned model selection, project-root path restriction.
 
-- **Reduce agent context usage**: No need to paste large files into Claude/Copilot prompts
-- **Reduce agent model costs**: Move deep analysis to Gemini, keeping calling agent tokens minimal
-- **Structured outputs**: JSON responses that agents can easily parse and use
-- **Safety by default**: Read-only analysis with path restriction enforcement
+**Table of contents**
+- [Better Gemini MCP](#better-gemini-mcp)
+  - [Overview](#overview)
+  - [Prerequisites](#prerequisites)
+  - [Quickstart](#quickstart)
+  - [Tools (overview \& examples)](#tools-overview--examples)
+  - [Troubleshooting (common issues)](#troubleshooting-common-issues)
+  - [Developer notes](#developer-notes)
+    - [Running tests \& development](#running-tests--development)
+  - [Contributing](#contributing)
+    - [Guidelines](#guidelines)
+  - [License](#license)
 
-## ✨ Features
+## Overview
 
-| Feature | Description |
-|---------|-------------|
-| 🔄 **Stateless** | Every tool call is independent—no session files or state to manage |
-| 🔒 **Read-Only** | Gemini CLI restricted to read operations only |
-| 📊 **Structured JSON** | All responses are parseable JSON with consistent format |
-| 🎯 **Smart Chunking** | Large responses automatically split into retrievable chunks |
-| ⚡ **Model Fallback** | 3-tier fallback: Gemini 3 → Gemini 2.5 → auto-select |
-| 📁 **Ignore Patterns** | Respects `.gitignore` plus common exclusions |
+Better Gemini MCP accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless, read-only mode to perform large-context analysis on local files referenced with `@path`. Results are returned as pretty-printed JSON strings suitable for programmatic consumption by agent clients.
 
-## 📦 Prerequisites
+## Prerequisites
+- Node.js 18+ installed
+- Gemini CLI installed: `npm install -g @google/gemini-cli`
+- Gemini CLI authenticated (recommended: `gemini` → Login with Google) or set `GEMINI_API_KEY`
 
-### 1. Node.js 18+
+Quick checks:
 ```bash
-node --version  # Should be v18.0.0 or higher
-```
-
-### 2. Gemini CLI
-```bash
-npm install -g @google/gemini-cli
+node --version
 gemini --version
 ```
 
-### 3. Authentication
+## Quickstart
+1. Validate environment (recommended):
 ```bash
-# Option 1: Login with Google (recommended)
-gemini
-# Select "Login with Google" and follow prompts
-
-# Option 2: API Key
-export GEMINI_API_KEY="your-api-key"
+npx better-gemini-mcp init
 ```
+This runs the setup wizard to check `gemini` is available, authentication is configured, and that a minimal headless invocation succeeds.
 
-## 🚀 Installation
-
-### Using npx (recommended)
-```bash
-npx better-gemini-mcp
-```
-
-### Global Install
+2. Start the MCP server (stdio transport):
+Or install globally:
 ```bash
 npm install -g better-gemini-mcp
 better-gemini-mcp
 ```
 
-### From Source
-```bash
-git clone https://github.com/YOUR_ORG/better-gemini-mcp.git
-cd better-gemini-mcp
-npm install
-npm run build
-npm start
+3. Configure your MCP client (VS Code, Claude Code, etc.)
+
+**Standard config** works in most of the tools:
+```json
+{
+  "mcpServers": {
+    "better-gemini": {
+      "command": "npx",
+      "args": [
+        "better-gemini-mcp"
+      ]
+    }
+  }
+}
 ```
 
-## ⚙️ Setup
+<details>
+<summary>VS Code</summary>
 
-### Setup Wizard
-Run the setup wizard to validate your environment:
-```bash
-npx better-gemini-mcp init
+Add to your VS Code MCP settings (create `.vscode/mcp.json` if needed):
+```json
+{
+  "servers": {
+    "better-gemini-mcp": {
+      "command": "npx",
+      "args": [
+        "better-gemini-mcp"
+      ]
+    }
+  }
+}
 ```
 
-This will check:
-- ✅ Gemini CLI installation
-- ✅ Authentication configuration  
-- ✅ Test invocation
+</details>
 
-### MCP Client Configuration
+<details>
+<summary>Claude Code</summary>
 
-#### Claude Desktop
-Add to `~/.config/Claude/claude_desktop_config.json`:
+**Option 1: Command line (recommended)**
+
+Local (user-wide) scope
+```bash
+# Add the MCP server via CLI
+claude mcp add --transport stdio better-gemini-mcp -- npx better-gemini-mcp 
+
+# Verify it was added
+claude mcp list
+```
+
+Project scope
+
+Navigate to your project directory, then run:
+```bash
+# Add the MCP server via CLI
+claude mcp add --scope project --transport stdio better-gemini-mcp -- npx better-gemini-mcp
+
+# Verify it was added
+claude mcp list
+```
+
+**Option 2: Manual configuration**
+
+Add to `.mcp.json` in your project root (project scope):
 ```json
 {
   "mcpServers": {
     "better-gemini-mcp": {
       "command": "npx",
-      "args": ["better-gemini-mcp"]
+      "args": [
+        "better-gemini-mcp"
+      ]
     }
   }
 }
 ```
 
-#### VS Code (GitHub Copilot)
-Add to your VS Code settings or `.vscode/mcp-settings.json`:
+Or add to `~/.claude/settings.json` for local scope.
+
+After adding the server, restart Claude Code and use `/mcp` to verify the connection.
+
+</details>
+
+<details>
+<summary>Cursor</summary>
+
+Go to `Cursor Settings` -> `Tools & MCP` -> `Add a Custom MCP Server`. Add the following configuration:
 ```json
 {
-  "mcp.servers": {
+  "mcpServers": {
+    "better-gemini-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "better-gemini-mcp"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+> [!NOTE]
+> The server automatically uses the directory where the IDE opened your workspace as the project root or where your terminal is. To analyze a different directory, optionally set `PROJECT_ROOT`:
+
+Example
+```json
+{
+  "mcpServers": {
     "better-gemini-mcp": {
       "command": "npx",
-      "args": ["better-gemini-mcp"]
+      "args": [
+        "better-gemini-mcp"
+      ],
+      "env": {
+        "PROJECT_ROOT": "/path/to/your/project"
+      }
     }
   }
 }
 ```
 
-## 🛠️ Available Tools
+4. Restart your MCP client
+5. Test with your agent: Try asking "Use better-gemini-mcp to analyze the project."
 
-### `quick_query`
-Fast analysis using Gemini flash models. Ideal for quick questions and focused analysis.
-
+## Tools (overview & examples)
+- **quick_query** — Fast, focused analysis (flash model). Example:
 ```json
 {
-  "prompt": "Explain the authentication flow in @src/auth.ts",
+  "prompt": "Explain @src/auth.ts login flow",
   "focus": "security",
   "responseStyle": "concise"
 }
 ```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `prompt` | string | ✅ | Research question (use `@path` to reference files) |
-| `focus` | enum | ❌ | `security`, `architecture`, `performance`, `general` |
-| `responseStyle` | enum | ❌ | `concise`, `normal`, `detailed` |
-
----
-
-### `deep_research`
-In-depth analysis using Gemini pro models. For complex queries across many files.
-
+- **deep_research** — Heavy-duty analysis across many files (pro model). Example:
 ```json
 {
-  "prompt": "Analyze the data flow from API to database across @src/",
+  "prompt": "Analyze authentication across @src/auth and @src/middleware",
   "focus": "architecture",
-  "citationMode": "paths_only"
-}
+  "citationMode": "paths_only" }
 ```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `prompt` | string | ✅ | Complex research question |
-| `focus` | enum | ❌ | `security`, `architecture`, `performance`, `general` |
-| `citationMode` | enum | ❌ | `none`, `paths_only` |
-
----
-
-### `analyze_directory`
-Summarize directory structure with file descriptions.
-
+- **analyze_directory** — Map a directory and summarize files. Example:
 ```json
 {
-  "path": "./src",
+  "path": "src",
   "depth": 3,
-  "maxFiles": 100
+  "maxFiles": 200
 }
 ```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `path` | string | ✅ | Relative path to directory |
-| `depth` | number | ❌ | Max traversal depth (default: unlimited) |
-| `maxFiles` | number | ❌ | Max files to enumerate (default: 500) |
-
----
-
-### `validate_paths`
-Preflight validation for file paths before analysis.
-
+- **validate_paths** — Preflight `@path` checks. Example:
 ```json
 {
-  "paths": ["src/index.ts", "config/settings.json"]
+  "paths": ["src/auth.ts", "README.md"]
 }
 ```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `paths` | string[] | ✅ | Array of paths to validate |
-
----
-
-### `health_check`
-Check server status and Gemini CLI configuration.
-
+- **health_check** — Server + Gemini diagnostics. Example:
 ```json
 {
   "includeDiagnostics": true
 }
 ```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `includeDiagnostics` | boolean | ❌ | Include detailed diagnostics |
-
----
-
-### `fetch_chunk`
-Retrieve chunked response segments for large outputs.
-
+- **fetch_chunk** — Retrieve chunked responses. Example:
 ```json
 {
-  "cacheKey": "cache_abc123",
-  "chunkIndex": 2
+  "cacheKey": "cache_abc123", "chunkIndex": 2
 }
 ```
 
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `cacheKey` | string | ✅ | Cache key from chunked response |
-| `chunkIndex` | number | ✅ | 1-based chunk index |
+Each tool returns a pretty-printed JSON string in the MCP `text` content. When large outputs are produced, responses are chunked (default ~10KB chunks), cached for 1 hour, and the initial response contains `chunks` metadata with a `cacheKey`.
 
-## 🔧 Configuration
+## Troubleshooting (common issues)
+- `GEMINI_CLI_NOT_FOUND`: Install Gemini CLI: `npm install -g @google/gemini-cli`
+- `AUTH_MISSING`: Run `gemini`, and authenticate or set `GEMINI_API_KEY`
+- `.gitignore` blocking files: Gemini respects `.gitignore` by default; toggle `fileFiltering.respectGitIgnore` in `gemini /settings` if you intentionally want ignored files included (note: this changes Gemini behavior globally)
+- `PATH_NOT_ALLOWED`: All `@path` references must resolve inside the configured project root (`process.cwd()` by default). Use `validate_paths` to pre-check paths.
+- `QUOTA_EXCEEDED`: Server retries with fallback models; if all tiers are exhausted, reduce scope (use `quick_query`) or wait for quota reset.
 
-### Environment Variables
+## Developer notes
+- The authoritative system prompt and constants live in `src/constants.ts`.
+- The Gemini CLI integration and model fallback logic live in `src/utils/geminiExecutor.ts`.
+- Tools are registered under `src/tools/*.tool.ts` and follow the UnifiedTool pattern in `src/tools/registry.ts`.
+- Key design rules: stateless operation, read-only enforcement, server-managed model tiers, project-root path restriction.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PROJECT_ROOT` | Project root directory | `process.cwd()` |
-| `RESPONSE_CHUNK_SIZE_KB` | Chunk size for large responses | `10` |
-| `CACHE_TTL_MS` | Cache expiration time (ms) | `3600000` (1 hour) |
-| `DEBUG` | Enable debug logging | `false` |
-| `GEMINI_API_KEY` | Gemini API key (alternative to Google login) | - |
-
-## 📐 Response Format
-
-All tools return structured JSON responses:
-
-### Success Response
-```json
-{
-  "tool": "quick_query",
-  "model": "gemini-3-flash-preview",
-  "answer": "Analysis result...",
-  "filesAccessed": ["src/auth.ts"],
-  "stats": {
-    "tokensUsed": 1234,
-    "latencyMs": 5053
-  },
-  "meta": {
-    "projectRoot": "/path/to/project",
-    "truncated": false,
-    "warnings": []
-  }
-}
-```
-
-### Chunked Response
-When output exceeds 10KB:
-```json
-{
-  "tool": "deep_research",
-  "answer": "First chunk...",
-  "chunks": {
-    "cacheKey": "cache_abc123",
-    "current": 1,
-    "total": 3
-  }
-}
-```
-Use `fetch_chunk` with the `cacheKey` to retrieve remaining chunks.
-
-### Error Response
-```json
-{
-  "error": {
-    "code": "PATH_NOT_ALLOWED",
-    "message": "Path is outside project root",
-    "details": {}
-  }
-}
-```
-
-## ❌ Error Codes
-
-| Code | Description | Resolution |
-|------|-------------|------------|
-| `INVALID_ARGUMENT` | Invalid tool parameters | Check parameter types |
-| `PATH_NOT_ALLOWED` | Path outside project root | Use paths within project |
-| `GEMINI_CLI_NOT_FOUND` | Gemini CLI not installed | Run `npm install -g @google/gemini-cli` |
-| `GEMINI_CLI_ERROR` | CLI execution failed | Check Gemini CLI logs |
-| `AUTH_MISSING` | Not authenticated | Run `gemini` to login |
-| `QUOTA_EXCEEDED` | API quota exhausted | Wait for reset or upgrade |
-| `CACHE_EXPIRED` | Chunk cache expired | Re-run original query |
-| `INVALID_CHUNK_INDEX` | Chunk index out of range | Check total chunks |
-
-## 🛡️ Security
-
-- **Read-only by default**: Gemini CLI invoked without `--yolo` flag
-- **Project root restriction**: All paths validated against project root
-- **Directory traversal prevention**: `../` patterns blocked
-- **Ignore patterns**: `node_modules`, `.git`, `dist`, etc. excluded
-- **No credential logging**: API keys never written to logs
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### "Gemini CLI not found"
-```bash
-npm install -g @google/gemini-cli
-# Verify installation
-which gemini
-```
-
-#### "Authentication not configured"
-```bash
-# Recommended: Login with Google
-gemini
-# Select "Login with Google"
-
-# Alternative: Set API key
-export GEMINI_API_KEY="your-key"
-```
-
-#### ".gitignore blocking files"
-Gemini CLI respects `.gitignore` by default. To analyze git-ignored files:
-```bash
-gemini
-# Type: /settings
-# Set: fileFiltering.respectGitIgnore = false
-```
-
-#### "Path not allowed"
-Ensure all `@path` references are relative to project root:
-```
-✅ @src/auth.ts
-✅ @./config.json
-❌ @../other-project/file.ts
-❌ @/etc/passwd
-```
-
-### Debug Mode
-Enable verbose logging:
-```bash
-DEBUG=true npx better-gemini-mcp
-```
-
-## 🏗️ Architecture
-
-```
-Agent (Claude/Copilot)
-         │
-         ▼
-   ┌─────────────┐
-   │  MCP Server │  ← Stateless, stdio transport
-   └──────┬──────┘
-          │
-          ▼
-   ┌─────────────┐
-   │ Gemini CLI  │  ← Read-only mode (-y, no --yolo)
-   └──────┬──────┘
-          │
-          ▼
-   ┌─────────────┐
-   │Project Files│  ← @path references
-   └─────────────┘
-```
-
-The server:
-1. Receives research queries via MCP protocol
-2. Validates paths and constructs Gemini CLI commands
-3. Prepends system prompt for token efficiency
-4. Spawns Gemini CLI with read-only restrictions
-5. Parses output and returns structured JSON
-
-## 📚 Documentation
-
-- [Product Requirements (PRD)](./docs/project-overview-PRD.md)
-- [Changelog](./CHANGELOG.md)
-- [Manual Testing Guide](./tests/MANUAL_TESTS.md)
-- [Copilot Instructions](./.github/copilot-instructions.md)
-
-## 🧪 Development
+### Running tests & development
 
 ```bash
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Run in development (watch mode)
 npm run dev
 
 # Run tests
@@ -415,12 +259,12 @@ npm run test:integration
 npm run lint
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please:
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+2. Create a feature branch (`git switch -c feature/amazing-feature`)
 3. Make your changes
 4. Run tests (`npm test`)
 5. Commit (`git commit -m 'Add amazing feature'`)
@@ -429,18 +273,19 @@ Contributions are welcome! Please:
 
 ### Guidelines
 
-- Use TypeScript with strict mode
-- All imports must use `.js` extension (ES Modules)
-- Add tests for new features
-- Update documentation as needed
-- Follow existing code style
+- **TypeScript strict mode**: All code uses TypeScript with strict type checking
+- **ES Modules**: All imports must use `.js` extension (not `.ts`) for Node16 module resolution
+- **Code style**: Follow existing patterns in `src/tools/*.tool.ts` (use UnifiedTool pattern)
+- **Stateless design**: No session files, persistent storage, or server-managed state
+- **Read-only enforcement**: Never modify files; all Gemini CLI calls must be read-only
+- **Testing**: Add unit/integration tests in `tests/` directory
 
-## 📄 License
+## License
 
-[MIT](./LICENSE)
+[BSD-3-Clause License](./LICENSE.md)
 
 ---
 
 <p align="center">
-  Made with ❤️ for the AI coding agent community
+  Made with ♡ for the AI-assisted dev community
 </p>

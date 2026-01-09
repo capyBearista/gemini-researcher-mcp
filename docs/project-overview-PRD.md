@@ -700,7 +700,7 @@ Next steps:
 3. Restart your MCP client
 4. Test with: "Can you list your available tools?"
 
-Documentation: https://github.com/YOUR_ORG/better-gemini-mcp
+Documentation: https://github.com/capyBearista/better-gemini-mcp
 ```
 
 #### When Setup Fails

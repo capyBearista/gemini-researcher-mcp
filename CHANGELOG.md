@@ -43,17 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Comprehensive README with installation, configuration, and usage
 - Product Requirements Document (PRD)
-- Manual testing checklist
-- MCP client configuration examples for Claude Desktop and VS Code
 
 ---
 
 ## [Unreleased]
 
-### Planned for Future Releases
+### Planned for Future Releases?
 
 - Docker distribution
 - Custom allowlist configuration
 - Sandbox mode support
 - Session support for multi-turn conversations
-- Custom `.gemini-ignore` pattern files
+- Custom `.geminiignore` pattern files
