@@ -11,7 +11,8 @@ dist/
 
 # IDE
 .vscode/
-.github/
+.github/*
+!.github/workflows/
 .idea/
 *.swp
 *.swo

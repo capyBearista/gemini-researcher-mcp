@@ -1,5 +1,8 @@
 # Better Gemini MCP
 
+[![npm version](https://badge.fury.io/js/better-gemini-mcp.svg)](https://www.npmjs.com/package/better-gemini-mcp)
+[![License: BSD-3](https://img.shields.io/badge/License-BSD%203--Clause-white.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 A lightweight, stateless MCP (Model Context Protocol) server that lets developer agents (Claude Code, GitHub Copilot) delegate deep repository analysis to the Gemini CLI. The server is read-only, returns structured JSON, and is optimized to reduce the calling agent's context and model usage.
 
 **Status:** v1 complete. Core features are stable, but still early days. Feedback welcome!
