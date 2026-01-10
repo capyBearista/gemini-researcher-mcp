@@ -61,17 +61,21 @@ export function toolExists(toolName: string): boolean {
 export function getToolDefinitions(): Tool[] {
   return toolRegistry.map((tool) => {
     // Convert Zod schema to JSON Schema
-    const raw = zodToJsonSchema(tool.zodSchema, tool.name) as Record<string, unknown>;
-    const definitions = raw.definitions as Record<string, unknown> | undefined;
-    const def = (definitions?.[tool.name] ?? raw) as {
+    const raw = zodToJsonSchema(tool.zodSchema, tool.name) as any;
+    const def = (raw.definitions?.[tool.name] ?? raw) as {
       properties?: Record<string, unknown>;
       required?: string[];
     };
-    
+
+    // Coerce properties to the expected object map type for MCP SDK
+    const properties: { [x: string]: object } = Object.fromEntries(
+      Object.entries(def.properties ?? {}).map(([key, value]) => [key, (value ?? {}) as object])
+    );
+
     const inputSchema: Tool["inputSchema"] = {
       type: "object",
-      properties: def.properties || {},
-      required: def.required || [],
+      properties,
+      required: def.required ?? [],
     };
 
     return {
