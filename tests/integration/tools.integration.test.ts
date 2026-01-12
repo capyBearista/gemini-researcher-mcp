@@ -10,12 +10,12 @@ import * as path from "path";
 import * as os from "os";
 
 // Import tools and registry
-import { toolRegistry, executeTool, getToolDefinitions } from "../../dist/tools/index.js";
+import { toolRegistry, executeTool, getToolDefinitions } from "../../src/tools/index.js";
 
 // Import utilities for setup
-import { clearAll as clearCache } from "../../dist/utils/responseCache.js";
-import { cacheResponse } from "../../dist/utils/responseCache.js";
-import type { CachedChunk } from "../../dist/types.js";
+import { clearAll as clearCache } from "../../src/utils/responseCache.js";
+import { cacheResponse } from "../../src/utils/responseCache.js";
+import type { CachedChunk } from "../../src/types.js";
 
 describe("Tool Integration Tests", () => {
   // Create a temporary test directory

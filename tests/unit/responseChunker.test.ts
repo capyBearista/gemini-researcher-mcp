@@ -11,7 +11,7 @@ import {
   needsChunking,
   estimateChunkCount,
   getChunkSizeKB,
-} from "../../dist/utils/responseChunker.js";
+} from "../../src/utils/responseChunker.js";
 
 describe("responseChunker", () => {
   const originalEnv = process.env.RESPONSE_CHUNK_SIZE_KB;

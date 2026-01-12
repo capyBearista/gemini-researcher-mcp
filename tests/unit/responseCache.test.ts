@@ -17,8 +17,8 @@ import {
   clearExpired,
   clearAll,
   getCacheStats,
-} from "../../dist/utils/responseCache.js";
-import type { CachedChunk } from "../../dist/types.js";
+} from "../../src/utils/responseCache.js";
+import type { CachedChunk } from "../../src/types.js";
 
 describe("responseCache", () => {
   beforeEach(() => {

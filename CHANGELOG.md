@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-01-12
+
+### Added
+
+- `CONTRIBUTING.md` with guidelines for environment setup, development standards, and contribution workflows.
+- GitHub Actions workflow for automated publishing to npm.
+
+### Changed
+
+- Enhanced setup wizard authentication checks to verify API keys, Vertex AI credentials, or cached CLI sessions.
+- Comprehensive update to `README.md` for improved clarity, updated tool descriptions, and streamlined configuration instructions.
+- Improved documentation links and setup completion messages in the wizard.
+
+### Fixed
+
+- Synchronized internal version constant in `constants.ts` with `package.json`.
+- Resolved GitHub Actions test failures, adding tsx
+
 ## [1.0.1] - 2026-01-10
 
 ### Changed

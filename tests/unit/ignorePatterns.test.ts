@@ -15,7 +15,7 @@ import {
   isIgnored,
   createIgnoreFilter,
   enumerateDirectory,
-} from "../../dist/utils/ignorePatterns.js";
+} from "../../src/utils/ignorePatterns.js";
 
 describe("ignorePatterns", () => {
   // Create a temporary test directory

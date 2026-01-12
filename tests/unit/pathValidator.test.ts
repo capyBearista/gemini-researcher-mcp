@@ -17,7 +17,7 @@ import {
   validatePromptPaths,
   checkPromptPathsValid,
   getProjectRoot,
-} from "../../dist/utils/pathValidator.js";
+} from "../../src/utils/pathValidator.js";
 
 describe("pathValidator", () => {
   // Use a temporary directory for testing

@@ -1,6 +1,6 @@
 {
   "name": "better-gemini-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Stateless MCP server that proxies research queries to Gemini CLI, reducing agent context/model usage",
   "type": "module",
   "main": "dist/index.js",
@@ -12,9 +12,9 @@
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/**/*.test.ts",
-    "test:unit": "node --test --experimental-strip-types tests/unit/**/*.test.ts",
-    "test:integration": "node --test --experimental-strip-types tests/integration/**/*.test.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:unit": "node --import tsx --test tests/unit/**/*.test.ts",
+    "test:integration": "node --import tsx --test tests/integration/**/*.test.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0"
   }
 }

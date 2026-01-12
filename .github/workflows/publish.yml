@@ -15,9 +15,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Wait before publishing
-        run: sleep 300  # 5 minutes safety window
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -49,6 +46,9 @@ jobs:
 
       - name: Build
         run: npm run build --if-present
+
+      - name: Wait before publishing
+        run: sleep 300  # 5 minutes safety window
 
       - name: Publish to npm
         if: steps.check_version.outputs.exists != 'true'
