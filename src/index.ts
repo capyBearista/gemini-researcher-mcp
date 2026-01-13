@@ -20,7 +20,7 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { ERROR_CODES, PROTOCOL, SERVER_INFO, LOG_PREFIX, WIZARD_MESSAGES } from "./constants.js";
+import { ERROR_CODES, PROTOCOL, SERVER_INFO, WIZARD_MESSAGES } from "./constants.js";
 import type { ToolArguments } from "./types.js";
 import { getToolDefinitions, executeTool, toolExists } from "./tools/index.js";
 import { runSetupWizard, validateEnvironment } from "./setup/index.js";

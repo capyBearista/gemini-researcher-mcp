@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import type { UnifiedTool } from "./registry.js";
-import type { HealthCheckArgs } from "../types.js";
+import type { HealthCheckArgs, HealthCheckResponse, Diagnostics } from "../types.js";
 import { SERVER_INFO, ERROR_CODES } from "../constants.js";
 import {
   isGeminiCLIInstalled,
@@ -47,7 +47,7 @@ export const healthCheckTool: UnifiedTool = {
     Logger.info(`health_check: Starting with includeDiagnostics=${includeDiagnostics}`);
 
     // Basic health check - just verify the server is running
-    const baseResponse = {
+    const baseResponse: HealthCheckResponse = {
       tool: "health_check",
       status: "ok",
       server: {
@@ -84,21 +84,7 @@ export const healthCheckTool: UnifiedTool = {
         authMethod = auth.method;
       }
 
-      // Build diagnostics response
-      const diagnostics: Record<string, unknown> = {
-        projectRoot,
-        geminiOnPath,
-        geminiVersion,
-        authConfigured,
-        readOnlyModeEnforced: true, // We never use --yolo flag
-      };
-
-      // Add auth method if available
-      if (authMethod) {
-        diagnostics.authMethod = authMethod;
-      }
-
-      // Add warnings if there are issues
+      // Collect warnings for any issues
       const warnings: string[] = [];
       if (!geminiOnPath) {
         warnings.push("Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli");
@@ -107,14 +93,21 @@ export const healthCheckTool: UnifiedTool = {
         warnings.push("Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google'.");
       }
 
-      if (warnings.length > 0) {
-        diagnostics.warnings = warnings;
-      }
+      // Build diagnostics with proper typing
+      const diagnostics: Diagnostics = {
+        projectRoot,
+        geminiOnPath,
+        geminiVersion,
+        authConfigured,
+        readOnlyModeEnforced: true, // We never use --yolo flag
+        ...(authMethod && { authMethod }),
+        ...(warnings.length > 0 && { warnings }),
+      };
 
       // Determine overall status
-      const status = geminiOnPath && authConfigured ? "ok" : "degraded";
+      const status: HealthCheckResponse["status"] = geminiOnPath && authConfigured ? "ok" : "degraded";
 
-      const response = {
+      const response: HealthCheckResponse = {
         tool: "health_check",
         status,
         server: {

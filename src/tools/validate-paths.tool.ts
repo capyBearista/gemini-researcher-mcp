@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import type { UnifiedTool } from "./registry.js";
-import type { ValidatePathsArgs } from "../types.js";
+import type { ValidatePathsArgs, ValidatePathsResponse } from "../types.js";
 import { ERROR_CODES } from "../constants.js";
 import { validatePath, getProjectRoot, Logger } from "../utils/index.js";
 
@@ -56,7 +56,7 @@ export const validatePathsTool: UnifiedTool = {
         {
           tool: "validate_paths",
           results: [],
-        },
+        } satisfies ValidatePathsResponse,
         null,
         2
       );
@@ -83,7 +83,7 @@ export const validatePathsTool: UnifiedTool = {
       {
         tool: "validate_paths",
         results,
-      },
+      } satisfies ValidatePathsResponse,
       null,
       2
     );

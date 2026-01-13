@@ -160,13 +160,14 @@ export interface ValidatePathsResponse {
 }
 
 /**
- * Diagnostics information
+ * Diagnostics information for health_check tool
  */
 export interface Diagnostics {
   projectRoot: string;
   geminiOnPath: boolean;
-  geminiVersion?: string;
+  geminiVersion?: string | null;
   authConfigured: boolean;
+  authMethod?: string;
   readOnlyModeEnforced: boolean;
   gitIgnoreRespected?: boolean;
   warnings?: string[];

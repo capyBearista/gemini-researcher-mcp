@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import type { UnifiedTool } from "./registry.js";
-import type { FetchChunkArgs } from "../types.js";
+import type { FetchChunkArgs, FetchChunkResponse } from "../types.js";
 import { ERROR_CODES, ERROR_MESSAGES } from "../constants.js";
 import { getResponse, getChunk, getCacheMetadata, Logger } from "../utils/index.js";
 
@@ -145,8 +145,8 @@ export const fetchChunkTool: UnifiedTool = {
       );
     }
 
-    // Build response
-    const response = {
+    // Build response with proper typing
+    const response: FetchChunkResponse = {
       tool: "fetch_chunk",
       cacheKey,
       chunk: {
