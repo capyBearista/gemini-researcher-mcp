@@ -1,6 +1,7 @@
 /**
  * Response cache utility for chunked responses
- * Implements in-memory cache with 1-hour TTL (PRD §5.7)
+ *
+ * Implements in-memory cache with 1-hour TTL for large response chunks.
  */
 
 import type { CacheEntry, CachedChunk } from "../types.js";

@@ -1,6 +1,7 @@
 /**
  * Response chunker utility for splitting large responses
- * Implements chunking with configurable size (PRD §5.2)
+ *
+ * Implements chunking with configurable size (default: 10KB per chunk).
  */
 
 import type { CachedChunk } from "../types.js";

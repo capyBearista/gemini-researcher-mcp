@@ -1,7 +1,8 @@
 /**
  * Quick Query Tool
- * Send a lightweight research prompt to Gemini CLI for fast analysis
- * Uses flash model for speed (PRD §5.2)
+ *
+ * Sends a lightweight research prompt to Gemini CLI for fast analysis.
+ * Uses flash model for speed and cost efficiency.
  */
 
 import { z } from "zod";
@@ -168,7 +169,7 @@ export const quickQueryTool: UnifiedTool = {
       // Determine error code and provide recovery hints
       let code: ErrorCode = ERROR_CODES.GEMINI_CLI_ERROR;
       let nextStep = "Check server logs for details";
-      
+
       if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
         code = ERROR_CODES.GEMINI_CLI_NOT_FOUND;
         nextStep = "Install Gemini CLI: npm install -g @google/gemini-cli, or run setup wizard: npx better-gemini-mcp init";
@@ -185,7 +186,7 @@ export const quickQueryTool: UnifiedTool = {
           error: {
             code,
             message: errorMessage,
-            details: { 
+            details: {
               tool: "quick_query",
               nextStep,
             },

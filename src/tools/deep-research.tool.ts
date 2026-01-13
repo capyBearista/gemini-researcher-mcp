@@ -1,7 +1,8 @@
 /**
  * Deep Research Tool
- * Send a heavyweight research prompt to Gemini CLI for in-depth analysis
- * Uses pro model for deeper reasoning (PRD §5.3)
+ *
+ * Sends a heavyweight research prompt to Gemini CLI for in-depth analysis.
+ * Uses pro model for deeper reasoning with larger context windows.
  */
 
 import { z } from "zod";
@@ -168,7 +169,7 @@ export const deepResearchTool: UnifiedTool = {
       // Determine error code and provide recovery hints
       let code: ErrorCode = ERROR_CODES.GEMINI_CLI_ERROR;
       let nextStep = "Check server logs for details";
-      
+
       if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
         code = ERROR_CODES.GEMINI_CLI_NOT_FOUND;
         nextStep = "Install Gemini CLI: npm install -g @google/gemini-cli, or run setup wizard: npx better-gemini-mcp init";
@@ -185,7 +186,7 @@ export const deepResearchTool: UnifiedTool = {
           error: {
             code,
             message: errorMessage,
-            details: { 
+            details: {
               tool: "deep_research",
               nextStep,
             },

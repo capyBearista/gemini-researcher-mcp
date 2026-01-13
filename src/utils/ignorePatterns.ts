@@ -1,6 +1,7 @@
 /**
  * Ignore patterns utility for directory enumeration
- * Respects .gitignore and hard-coded exclusions (PRD §6.3)
+ *
+ * Respects .gitignore and applies hard-coded exclusions for common directories.
  */
 
 import * as fs from "fs";

@@ -152,8 +152,10 @@ export interface PathValidationResult {
 
 /**
  * Response structure for validate_paths tool
+ * Note: Does not include meta field (simpler utility response)
  */
-export interface ValidatePathsResponse extends BaseToolResponse {
+export interface ValidatePathsResponse {
+  tool: string;
   results: PathValidationResult[];
 }
 
@@ -172,9 +174,11 @@ export interface Diagnostics {
 
 /**
  * Response structure for health_check tool
+ * Note: Does not include meta field (simpler utility response)
  */
-export interface HealthCheckResponse extends BaseToolResponse {
-  status: "ok" | "error";
+export interface HealthCheckResponse {
+  tool: string;
+  status: "ok" | "degraded" | "error";
   server: {
     name: string;
     version: string;
@@ -184,15 +188,17 @@ export interface HealthCheckResponse extends BaseToolResponse {
 
 /**
  * Response structure for fetch_chunk tool
+ * Note: Has simplified meta with just expiresAt
  */
-export interface FetchChunkResponse extends BaseToolResponse {
+export interface FetchChunkResponse {
+  tool: string;
   cacheKey: string;
   chunk: {
     index: number;
     total: number;
     content: string;
   };
-  meta: ResponseMeta & {
+  meta: {
     expiresAt: string;
   };
 }

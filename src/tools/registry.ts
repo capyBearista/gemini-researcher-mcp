@@ -19,16 +19,16 @@ import type { ToolArguments, ProgressCallback } from "../types.js";
 export interface UnifiedTool {
   /** Tool name (snake_case, e.g., 'quick_query') */
   name: string;
-  
+
   /** Human-readable description for MCP tools/list */
   description: string;
-  
+
   /** Zod schema for input validation */
   zodSchema: ZodTypeAny;
-  
+
   /** Execute the tool with validated arguments */
   execute: (args: ToolArguments, onProgress?: ProgressCallback) => Promise<string>;
-  
+
   /** Optional category for grouping */
   category?: "query" | "utility";
 }
@@ -96,7 +96,7 @@ export async function executeTool(
   onProgress?: ProgressCallback
 ): Promise<string> {
   const tool = toolRegistry.find((t) => t.name === toolName);
-  
+
   if (!tool) {
     throw new Error(`Unknown tool: ${toolName}`);
   }

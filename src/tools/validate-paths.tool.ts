@@ -1,7 +1,8 @@
 /**
  * Validate Paths Tool
- * Preflight check for @path references (existence + within project root)
- * NO Gemini CLI invocation - pure validation utility (PRD §5.5)
+ *
+ * Preflight check for @path references (existence + within project root).
+ * This is a pure validation utility that does not invoke Gemini CLI.
  */
 
 import { z } from "zod";

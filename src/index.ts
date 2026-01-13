@@ -2,11 +2,11 @@
 
 /**
  * Better Gemini MCP Server
- * 
+ *
  * A stateless MCP server that proxies research queries to Gemini CLI,
  * reducing agent context/model usage.
- * 
- * @see docs/project-overview-PRD.md for full specification
+ *
+ * @see ./docs/project-overview-PRD.md for full specification
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -53,17 +53,6 @@ let latestOutput = "";
 // ============================================================================
 // Notification Helpers
 // ============================================================================
-
-/**
- * Send a notification to the client
- */
-async function sendNotification(method: string, params: Record<string, unknown>): Promise<void> {
-  try {
-    await server.notification({ method, params });
-  } catch (error) {
-    logError("notification failed:", error);
-  }
-}
 
 /**
  * Send a progress notification to the client
@@ -331,12 +320,12 @@ async function handleInitCommand(): Promise<void> {
  */
 async function performStartupValidation(): Promise<boolean> {
   const result = await validateEnvironment();
-  
+
   if (!result.valid) {
     console.error(result.error);
     return false;
   }
-  
+
   logInfo(WIZARD_MESSAGES.STARTUP_SUCCESS);
   return true;
 }

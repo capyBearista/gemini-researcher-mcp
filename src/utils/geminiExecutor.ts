@@ -1,10 +1,11 @@
 /**
  * Gemini CLI executor utility
- * Handles all interactions with the Gemini CLI binary
- * Implements 3-tier model fallback strategy (PRD §7.3)
+ *
+ * Handles all interactions with the Gemini CLI binary.
+ * Implements a 3-tier model fallback strategy for resilience.
  */
 
-import { SYSTEM_PROMPT, MODELS, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES } from "../constants.js";
+import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES } from "../constants.js";
 import { Logger } from "./logger.js";
 import { executeCommand, commandExists, getCommandVersion } from "./commandExecutor.js";
 import type { ProgressCallback } from "../types.js";

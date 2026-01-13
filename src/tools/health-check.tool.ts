@@ -1,7 +1,8 @@
 /**
  * Health Check Tool
- * Confirm the MCP server is running and validate Gemini CLI setup
- * (PRD §5.6)
+ *
+ * Confirms the MCP server is running and validates Gemini CLI setup.
+ * Optionally includes detailed diagnostics.
  */
 
 import { z } from "zod";

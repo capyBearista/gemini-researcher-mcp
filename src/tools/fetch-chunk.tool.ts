@@ -1,7 +1,8 @@
 /**
  * Fetch Chunk Tool
- * Retrieve a specific chunk of a large response that was previously split
- * (PRD §5.7)
+ *
+ * Retrieves a specific chunk of a large response that was previously split.
+ * Used to continue receiving chunked responses after initial tool calls.
  */
 
 import { z } from "zod";
@@ -78,7 +79,7 @@ export const fetchChunkTool: UnifiedTool = {
           error: {
             code: ERROR_CODES.CACHE_EXPIRED,
             message: ERROR_MESSAGES.CACHE_EXPIRED,
-            details: { 
+            details: {
               cacheKey,
               nextStep: "Cache expired (1-hour TTL). Re-run the original query to regenerate the response.",
             },
@@ -97,7 +98,7 @@ export const fetchChunkTool: UnifiedTool = {
           error: {
             code: ERROR_CODES.CACHE_EXPIRED,
             message: ERROR_MESSAGES.CACHE_EXPIRED,
-            details: { 
+            details: {
               cacheKey,
               nextStep: "Cache expired (1-hour TTL). Re-run the original query to regenerate the response.",
             },

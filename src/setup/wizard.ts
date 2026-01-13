@@ -117,7 +117,7 @@ async function getGeminiVersion(): Promise<string | null> {
  */
 export async function checkGeminiInstallation(): Promise<GeminiInstallCheck> {
   const geminiPath = await getGeminiPath();
-  
+
   if (!geminiPath) {
     return {
       installed: false,
@@ -127,7 +127,7 @@ export async function checkGeminiInstallation(): Promise<GeminiInstallCheck> {
   }
 
   const version = await getGeminiVersion();
-  
+
   return {
     installed: true,
     path: geminiPath,
@@ -170,29 +170,29 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
       CLI.FLAGS.OUTPUT_FORMAT,
       CLI.OUTPUT_FORMATS.JSON,
     ], 120000); // 2 minutes timeout
-    
+
     // Try to parse JSON output to verify it's working correctly
     try {
       JSON.parse(output);
     } catch {
       // Even if we can't parse JSON, if we got output, it worked
     }
-    
+
     return {
       success: true,
       message: "Test invocation successful",
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // Check if error is likely auth-related
-    const isAuthError = 
+    const isAuthError =
       errorMessage.includes('auth') ||
       errorMessage.includes('login') ||
       errorMessage.includes('credential') ||
       errorMessage.includes('unauthenticated') ||
       errorMessage.includes('timed out'); // Timeout often means waiting for auth prompt
-    
+
     return {
       success: false,
       message: errorMessage,
@@ -211,14 +211,14 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
  */
 export async function runSetupWizard(): Promise<boolean> {
   let hasErrors = false;
-  
+
   // Print header
   console.log(WIZARD_MESSAGES.HEADER);
-  
+
   // Step 1: Check Gemini CLI installation
   console.log(WIZARD_MESSAGES.STEP_GEMINI_INSTALL);
   const installCheck = await checkGeminiInstallation();
-  
+
   if (installCheck.installed && installCheck.path && installCheck.version) {
     console.log(WIZARD_MESSAGES.GEMINI_FOUND(installCheck.path, installCheck.version));
   } else if (installCheck.installed && installCheck.path) {
@@ -227,23 +227,23 @@ export async function runSetupWizard(): Promise<boolean> {
     console.log(WIZARD_MESSAGES.GEMINI_NOT_FOUND);
     hasErrors = true;
   }
-  
+
   console.log(); // Empty line for spacing
-  
+
   // Step 2: Test invocation (only if Gemini is installed)
   console.log(WIZARD_MESSAGES.STEP_TEST);
-  
+
   if (!installCheck.installed) {
     console.log("  ⚠ Skipped (Gemini CLI not installed)");
   } else {
     const testResult = await testGeminiInvocation();
-    
+
     if (testResult.success) {
       console.log(WIZARD_MESSAGES.TEST_SUCCESS);
     } else {
       console.log(WIZARD_MESSAGES.TEST_FAILED(testResult.message || "Unknown error"));
       hasErrors = true;
-      
+
       // If error is likely auth-related, show auth instructions
       if (testResult.isAuthError) {
         console.log("");
@@ -251,9 +251,9 @@ export async function runSetupWizard(): Promise<boolean> {
       }
     }
   }
-  
+
   console.log(); // Empty line before final section
-  
+
   // Print result
   if (hasErrors) {
     console.log(WIZARD_MESSAGES.FIX_ISSUES);
@@ -284,7 +284,7 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
     };
   }
 
-  // Check authentication (PRD §9.4)
+  // Check authentication
   if (!isAuthConfigured()) {
     return {
       valid: false,

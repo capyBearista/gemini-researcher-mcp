@@ -10,7 +10,7 @@
 export const LOG_PREFIX = "[BGMCP]";
 
 // ============================================================================
-// Error Codes (Appendix B from PRD)
+// Error Codes
 // ============================================================================
 
 export const ERROR_CODES = {
@@ -67,18 +67,18 @@ export const STATUS_MESSAGES = {
 } as const;
 
 // ============================================================================
-// Model Configuration (Appendix A from PRD)
+// Model Configuration
 // ============================================================================
 
 export const MODELS = {
   // Tier 1: Default models (Gemini 3 - requires Preview Features)
   FLASH_DEFAULT: "gemini-3-flash-preview",
   PRO_DEFAULT: "gemini-3-pro-preview",
-  
+
   // Tier 2: Fallback models (Gemini 2.5)
   FLASH_FALLBACK: "gemini-2.5-flash",
   PRO_FALLBACK: "gemini-2.5-pro",
-  
+
   // Tier 3: Auto-select (no -m flag, let Gemini CLI choose)
   AUTO_SELECT: null,
 } as const;
@@ -192,7 +192,7 @@ export const DEFAULT_IGNORE_PATTERNS = [
 ] as const;
 
 // ============================================================================
-// System Prompt (PRD §7.5)
+// System Prompt
 // ============================================================================
 
 export const SYSTEM_PROMPT = `
@@ -246,16 +246,16 @@ Setup Complete! 🎉
 `,
   STEP_GEMINI_INSTALL: "[1/2] Checking Gemini CLI installation...",
   STEP_TEST: "[2/2] Testing Gemini CLI...",
-  
+
   GEMINI_FOUND: (path: string, version: string) => `  ✓ Gemini CLI found at ${path} (version ${version})`,
   GEMINI_NOT_FOUND: `  ✗ Gemini CLI not found
 
   Install Gemini CLI:
     npm install -g @google/gemini-cli
-  
+
   Documentation:
     https://github.com/google-gemini/gemini-cli`,
-  
+
   AUTH_NOT_FOUND: `  ✗ No authentication configured
 
   Option 1: Login with Google (Recommended)
@@ -271,10 +271,10 @@ Setup Complete! 🎉
 
   Option 3: Vertex AI (For enterprise users)
     - See: https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/authentication.md#vertex-ai`,
-  
+
   TEST_SUCCESS: "  ✓ Test invocation successful",
   TEST_FAILED: (error: string) => `  ✗ Test invocation failed: ${error}`,
-  
+
   NEXT_STEPS: `
 Next steps:
 1. Configure your MCP client (Claude Desktop, VS Code, Cursor, etc.)
@@ -284,11 +284,11 @@ Next steps:
 
 Documentation: https://github.com/capyBearista/better-gemini-mcp
 `,
-  
+
   FIX_ISSUES: `
 Please fix the issues above and run 'npx better-gemini-mcp init' again.
 `,
-  
+
   // Startup validation messages
   STARTUP_SUCCESS: "✅ All checks passed! Server starting...",
   STARTUP_GEMINI_NOT_FOUND: `❌ Gemini CLI not found on PATH

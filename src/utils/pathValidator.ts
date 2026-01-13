@@ -1,6 +1,7 @@
 /**
  * Path validation utility for security enforcement
- * Ensures all paths are within project root (PRD §6.1, §6.2)
+ *
+ * Ensures all paths are within project root to prevent unauthorized access.
  */
 
 import * as path from "path";
