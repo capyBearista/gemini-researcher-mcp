@@ -20,10 +20,11 @@ import {
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { PROTOCOL, SERVER_INFO, LOG_PREFIX, WIZARD_MESSAGES } from "./constants.js";
+import { ERROR_CODES, PROTOCOL, SERVER_INFO, LOG_PREFIX, WIZARD_MESSAGES } from "./constants.js";
 import type { ToolArguments } from "./types.js";
 import { getToolDefinitions, executeTool, toolExists } from "./tools/index.js";
 import { runSetupWizard, validateEnvironment } from "./setup/index.js";
+import { Logger } from "./utils/index.js";
 
 // ============================================================================
 // Server Instance
@@ -183,33 +184,31 @@ function stopProgressUpdates(progressData: ProgressData, success: boolean = true
 // ============================================================================
 
 /**
- * Log debug message to stderr (stdout reserved for MCP protocol)
+ * Log debug message using Logger utility with sanitization
  */
 function logDebug(message: string, ...args: unknown[]): void {
-  if (process.env.DEBUG) {
-    console.error(`${LOG_PREFIX} [DEBUG]`, message, ...args);
-  }
+  Logger.debug(message, ...args);
 }
 
 /**
- * Log info message to stderr
+ * Log info message using Logger utility with sanitization
  */
 function logInfo(message: string, ...args: unknown[]): void {
-  console.error(`${LOG_PREFIX} [INFO]`, message, ...args);
+  Logger.info(message, ...args);
 }
 
 /**
- * Log error message to stderr
+ * Log error message using Logger utility with sanitization
  */
 function logError(message: string, ...args: unknown[]): void {
-  console.error(`${LOG_PREFIX} [ERROR]`, message, ...args);
+  Logger.error(message, ...args);
 }
 
 /**
- * Log tool invocation for debugging
+ * Log tool invocation using Logger utility with sanitization
  */
 function logToolInvocation(toolName: string, args: unknown): void {
-  logDebug(`Tool invoked: ${toolName}`, JSON.stringify(args, null, 2));
+  Logger.toolInvocation(toolName, args as Record<string, unknown>);
 }
 
 // ============================================================================
@@ -287,7 +286,7 @@ server.setRequestHandler(
             text: JSON.stringify(
               {
                 error: {
-                  code: "INTERNAL",
+                  code: ERROR_CODES.INTERNAL,
                   message: `Error executing ${toolName}: ${errorMessage}`,
                 },
               },
