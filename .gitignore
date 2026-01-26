@@ -4,10 +4,11 @@ node_modules/
 # Build output
 dist/
 
-# Environment files
+# Environment files and secrets
 .env
 .env.local
 .env.*.local
+*_token
 
 # IDE
 .vscode/
@@ -31,3 +32,6 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+# MCP Registry
+# server.json

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.capyBearista/gemini-researcher",
+  "description": "Stateless MCP server that proxies research queries to Gemini CLI, reducing agent context/model usage",
+  "repository": {
+    "url": "https://github.com/capyBearista/gemini-researcher",
+    "source": "github"
+  },
+  "version": "1.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "gemini-researcher",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Gemini API key (optional if you already authenticated Gemini CLI via \"gemini\" login)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "GEMINI_API_KEY"
+        },
+        {
+          "description": "Override the project root directory used for path validation (defaults to current working directory)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "PROJECT_ROOT"
+        },
+        {
+          "description": "Chunk size threshold (KB) for large responses (default: 10)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "RESPONSE_CHUNK_SIZE_KB"
+        },
+        {
+          "description": "Chunk cache TTL in milliseconds (default: 3600000 / 1 hour)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "CACHE_TTL_MS"
+        },
+        {
+          "description": "Enable debug logging (set to \"true\" or \"1\")",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "DEBUG"
+        },
+        {
+          "description": "Vertex AI / Google auth: path to a service account JSON credentials file",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "GOOGLE_APPLICATION_CREDENTIALS"
+        },
+        {
+          "description": "Vertex AI / Google auth: GCP project ID (used by some auth configurations)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "GOOGLE_CLOUD_PROJECT"
+        },
+        {
+          "description": "Vertex AI / Google auth: Vertex AI project identifier (used by some auth configurations)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "VERTEX_AI_PROJECT"
+        }
+      ]
+    }
+  ]
+}
