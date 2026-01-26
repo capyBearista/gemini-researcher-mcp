@@ -24,6 +24,9 @@ This release addresses security vulnerabilities in the Docker image only. If you
   - Reduced image size from 257 MB to 213 MB
   - Reduced total packages from 874 to 726
   - Reduced LOW severity CVEs from 48 to 2
+- **Multi-platform support**: Added ARM64 (Apple Silicon) build support
+  - Image now available for both `linux/amd64` and `linux/arm64`
+  - Added build dependencies for tree-sitter native compilation on ARM64
 
 ### Note
 
