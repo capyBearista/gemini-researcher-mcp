@@ -1,0 +1,47 @@
+# =============================================================================
+# Docker Ignore - gemini-researcher
+# =============================================================================
+# Exclude files not needed in the Docker build context
+
+# Dependencies (installed in container)
+node_modules/
+
+# Build output (rebuilt in container)
+dist/
+
+# Git
+.git/
+.gitignore
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed at runtime)
+docs/
+prompts/
+references/
+*.md
+!README.md
+
+# Tests (not needed in production image)
+tests/
+
+# Development files
+.github/
+.claude/
+*.log
+*.tsbuildinfo
+
+# Environment files (secrets should be passed at runtime)
+.env
+.env.*
+
+# Local configuration
+.gemini/

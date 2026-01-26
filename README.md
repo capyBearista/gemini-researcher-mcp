@@ -35,6 +35,7 @@ Instead of copying entire files into your agent's context (burning tokens and cl
     - [Step 4: Test it](#step-4-test-it)
   - [Tools](#tools)
     - [Example workflows](#example-workflows)
+  - [Docker](#docker)
   - [Troubleshooting (common issues)](#troubleshooting-common-issues)
   - [Contributing](#contributing)
   - [License](#license)
@@ -272,6 +273,44 @@ Agent: Use analyze_directory on src/ with depth 3 to understand the project stru
 ```
 
 </details>
+
+## Docker
+
+You can also run gemini-researcher in a Docker container:
+
+```bash
+# Build the image
+docker build -t gemini-researcher .
+
+# Run the server (mount your project and provide API key)
+docker run -i \
+  -e GEMINI_API_KEY="your-api-key" \
+  -v /path/to/your/project:/workspace \
+  gemini-researcher
+```
+
+For MCP client configuration with Docker:
+```json
+{
+  "mcpServers": {
+    "gemini-researcher": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GEMINI_API_KEY",
+        "-v", "/path/to/your/project:/workspace",
+        "gemini-researcher"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+> [!NOTE]
+> The `-i` flag is required for stdio transport. The container mounts your project to `/workspace` which becomes the project root.
 
 ## Troubleshooting (common issues)
 - `GEMINI_CLI_NOT_FOUND`: Install Gemini CLI: `npm install -g @google/gemini-cli`
