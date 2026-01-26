@@ -41,7 +41,8 @@ RUN npm run build
 FROM node:22-alpine AS production
 
 # Install git (required for .gitignore parsing by the 'ignore' package)
-RUN apk add --no-cache git
+# Install build dependencies for native modules (required for arm64 compilation of tree-sitter)
+RUN apk add --no-cache git python3 make g++
 
 WORKDIR /app
 
@@ -56,6 +57,9 @@ RUN npm install -g npm@latest && npm cache clean --force
 
 # Install Gemini CLI globally (required for proxying queries)
 RUN npm install -g @google/gemini-cli
+
+# Remove build dependencies to reduce image size (keep git, it's needed at runtime)
+RUN apk del python3 make g++
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
