@@ -3,6 +3,9 @@
 [![NPM Version](https://img.shields.io/npm/v/gemini-researcher?logo=npm)](https://www.npmjs.com/package/gemini-researcher)
 [![NPM Downloads](https://img.shields.io/npm/d18m/gemini-researcher?logo=npm)](https://www.npmjs.com/package/gemini-researcher)
 [![License: BSD-3 Claude](https://img.shields.io/badge/License-BSD%203--Clause-white.svg)](https://opensource.org/licenses/BSD-3-Clause)
+<a href="https://glama.ai/mcp/servers/@capyBearista/gemini-researcher">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@capyBearista/gemini-researcher/badge" />
+</a>
 
 A lightweight, stateless MCP (Model Context Protocol) server that lets developer agents (Claude Code, GitHub Copilot) delegate deep repository analysis to the Gemini CLI. The server is read-only, returns structured JSON (as text content), and is optimized to reduce the calling agent's context and model usage.
 
@@ -276,17 +279,17 @@ Agent: Use analyze_directory on src/ with depth 3 to understand the project stru
 
 ## Docker
 
-You can also run gemini-researcher in a Docker container:
+A pre-built multi-platform Docker image is available on [Docker Hub](https://hub.docker.com/r/capybearista/gemini-researcher):
 
 ```bash
-# Build the image
-docker build -t gemini-researcher .
+# Pull the image (works on Intel/AMD and Apple Silicon)
+docker pull capybearista/gemini-researcher:latest
 
 # Run the server (mount your project and provide API key)
-docker run -i \
+docker run -i --rm \
   -e GEMINI_API_KEY="your-api-key" \
   -v /path/to/your/project:/workspace \
-  gemini-researcher
+  capybearista/gemini-researcher:latest
 ```
 
 For MCP client configuration with Docker:
@@ -299,7 +302,7 @@ For MCP client configuration with Docker:
         "run", "-i", "--rm",
         "-e", "GEMINI_API_KEY",
         "-v", "/path/to/your/project:/workspace",
-        "gemini-researcher"
+        "capybearista/gemini-researcher:latest"
       ],
       "env": {
         "GEMINI_API_KEY": "your-api-key-here"
@@ -310,7 +313,10 @@ For MCP client configuration with Docker:
 ```
 
 > [!NOTE]
-> The `-i` flag is required for stdio transport. The container mounts your project to `/workspace` which becomes the project root.
+> - The `-i` flag is required for stdio transport
+> - The container mounts your project to `/workspace` (the project root)
+> - Replace `/path/to/your/project` with your actual project path
+> - Replace `your-api-key` with your actual Gemini API key (this is required for Docker usage)
 
 ## Troubleshooting (common issues)
 - `GEMINI_CLI_NOT_FOUND`: Install Gemini CLI: `npm install -g @google/gemini-cli`
