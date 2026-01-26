@@ -1,11 +1,12 @@
 {
-  "name": "better-gemini-mcp",
+  "name": "gemini-researcher",
   "version": "1.0.2",
+  "mcpName": "io.github.capyBearista/gemini-researcher",
   "description": "Stateless MCP server that proxies research queries to Gemini CLI, reducing agent context/model usage",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "better-gemini-mcp": "dist/index.js"
+    "gemini-researcher": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -34,12 +35,12 @@
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/capyBearista/better-gemini-mcp.git"
+    "url": "git+https://github.com/capyBearista/gemini-researcher.git"
   },
   "bugs": {
-    "url": "https://github.com/capyBearista/better-gemini-mcp/issues"
+    "url": "https://github.com/capyBearista/gemini-researcher/issues"
   },
-  "homepage": "https://github.com/capyBearista/better-gemini-mcp#readme",
+  "homepage": "https://github.com/capyBearista/gemini-researcher#readme",
   "engines": {
     "node": ">=18.0.0"
   },

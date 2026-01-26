@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Better Gemini MCP Server
+ * Gemini Researcher Server
  *
  * A stateless MCP server that proxies research queries to Gemini CLI,
  * reducing agent context/model usage.

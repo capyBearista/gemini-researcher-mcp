@@ -1,4 +1,4 @@
-# Contributing to Better Gemini MCP
+# Contributing to Gemini Researcher
 
 Thank you for your interest in contributing! This document provides guidelines and technical details for contributors.
 
@@ -16,7 +16,7 @@ Thank you for your interest in contributing! This document provides guidelines a
 
 Before contributing, please:
 
-1. Check existing [issues](https://github.com/capyBearista/better-gemini-mcp/issues) to avoid duplicate work
+1. Check existing [issues](https://github.com/capyBearista/gemini-researcher/issues) to avoid duplicate work
 2. For major changes, open an issue first to discuss your proposal
 3. Read through this guide to understand the codebase structure and conventions
 
@@ -32,8 +32,8 @@ Before contributing, please:
 ### Clone and install
 
 ```bash
-git clone https://github.com/capyBearista/better-gemini-mcp.git
-cd better-gemini-mcp
+git clone https://github.com/capyBearista/gemini-researcher.git
+cd gemini-researcher
 npm install
 ```
 
@@ -329,7 +329,7 @@ Contributors do not need to bump versions in their PRs.
 
 ## Questions?
 
-- Open an [issue](https://github.com/capyBearista/better-gemini-mcp/issues) for technical questions
+- Open an [issue](https://github.com/capyBearista/gemini-researcher/issues) for technical questions
 - Check existing issues and discussions first
 
-Thank you for contributing to Better Gemini MCP!
+Thank you for contributing to Gemini Researcher!

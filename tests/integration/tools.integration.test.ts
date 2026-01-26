@@ -167,7 +167,7 @@ describe("Tool Integration Tests", () => {
       assert.strictEqual(parsed.tool, "health_check");
       assert.ok(["ok", "degraded", "error"].includes(parsed.status));
       assert.ok(parsed.server);
-      assert.strictEqual(parsed.server.name, "better-gemini-mcp");
+      assert.strictEqual(parsed.server.name, "gemini-researcher");
     });
 
     it("should include diagnostics when requested", async () => {

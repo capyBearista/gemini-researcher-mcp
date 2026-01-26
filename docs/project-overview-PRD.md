@@ -365,7 +365,7 @@ Confirm the MCP server is running and able to service requests. Validate Gemini 
   "tool": "health_check",
   "status": "ok",
   "server": {
-    "name": "better-gemini-mcp",
+    "name": "gemini-researcher",
     "version": "1.0.0"
   },
   "diagnostics": {
@@ -563,7 +563,7 @@ When `includeDiagnostics: true`, check if `respectGitIgnore` is enabled:
 ```
 
 #### Warning Touchpoint B: Setup Wizard
-During `npx better-gemini-mcp init`, check user's `~/.gemini/settings.json`:
+During `npx gemini-researcher init`, check user's `~/.gemini/settings.json`:
 
 ```bash
 [Warning] Your Gemini CLI is configured to respect .gitignore patterns.
@@ -650,7 +650,7 @@ Provide a lightweight setup wizard to help first-time users validate their envir
 
 #### Usage
 ```bash
-npx better-gemini-mcp init
+npx gemini-researcher init
 ```
 
 #### Behavior
@@ -672,7 +672,7 @@ npx better-gemini-mcp init
 
 #### Example Output
 ```bash
-$ npx better-gemini-mcp init
+$ npx gemini-researcher init
 
 Better Gemini MCP — Setup Wizard
 ================================
@@ -696,9 +696,9 @@ Next steps:
    For Claude Desktop (~/.config/Claude/claude_desktop_config.json):
    {
      "mcpServers": {
-       "better-gemini-mcp": {
+       "gemini-researcher": {
          "command": "npx",
-         "args": ["better-gemini-mcp"]
+         "args": ["gemini-researcher"]
        }
      }
    }
@@ -706,12 +706,12 @@ Next steps:
 3. Restart your MCP client
 4. Test with: "Can you list your available tools?"
 
-Documentation: https://github.com/capyBearista/better-gemini-mcp
+Documentation: https://github.com/capyBearista/gemini-researcher
 ```
 
 #### When Setup Fails
 ```bash
-$ npx better-gemini-mcp init
+$ npx gemini-researcher init
 
 Better Gemini MCP — Setup Wizard
 ================================
@@ -742,13 +742,13 @@ Better Gemini MCP — Setup Wizard
   Option 3: Vertex AI (For enterprise users)
     - See: https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/authentication.md#vertex-ai
 
-Please fix the issues above and run 'npx better-gemini-mcp init' again.
+Please fix the issues above and run 'npx gemini-researcher init' again.
 ```
 
 ### 10.2 Server Startup Without `init`
-If a user runs the server directly (`npx better-gemini-mcp`) without running `init`, the server should:
+If a user runs the server directly (`npx gemini-researcher`) without running `init`, the server should:
 1. Perform the same validation checks.
-2. If validation fails, print a concise error and suggest running `npx better-gemini-mcp init`.
+2. If validation fails, print a concise error and suggest running `npx gemini-researcher init`.
 3. If validation passes, start the MCP server normally.
 
 ---
@@ -756,23 +756,23 @@ If a user runs the server directly (`npx better-gemini-mcp`) without running `in
 ## 11) Packaging & Distribution (v1)
 
 ### 11.1 NPX
-- `npx better-gemini-mcp` launches the MCP server over stdio.
-- `npx better-gemini-mcp init` runs the setup wizard.
+- `npx gemini-researcher` launches the MCP server over stdio.
+- `npx gemini-researcher init` runs the setup wizard.
 
 ### 11.2 Global Install
-- `npm install -g better-gemini-mcp`
+- `npm install -g gemini-researcher`
 - Exposes executable entrypoints:
-  - `better-gemini-mcp` (starts server)
-  - `better-gemini-mcp init` (runs setup wizard)
+  - `gemini-researcher` (starts server)
+  - `gemini-researcher init` (runs setup wizard)
 
 ### 11.3 Package.json
 ```json
 {
-  "name": "better-gemini-mcp",
+  "name": "gemini-researcher",
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "better-gemini-mcp": "./dist/index.js"
+    "gemini-researcher": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -874,7 +874,7 @@ Create `src/utils/geminiExecutor.ts` with the following responsibilities:
 
 ### 14.3 File Structure (Expected)
 ```
-better-gemini-mcp/
+gemini-researcher/
 ├── src/
 │   ├── index.ts                   # Main MCP server (stdio transport)
 │   ├── constants.ts               # Error messages, protocol constants, model names, system prompt

@@ -1,5 +1,5 @@
 /**
- * Structured logging utility for Better Gemini MCP Server
+ * Structured logging utility for Gemini Researcher Server
  * Implements logging with levels: error, warn, info, debug
  * NEVER logs sensitive credentials like GEMINI_API_KEY
  */

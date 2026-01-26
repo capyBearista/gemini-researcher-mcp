@@ -1,7 +1,7 @@
-# Better Gemini MCP
+# Gemini Researcher
 
-[![NPM Version](https://img.shields.io/npm/v/better-gemini-mcp?logo=npm)](https://www.npmjs.com/package/better-gemini-mcp)
-[![NPM Downloads](https://img.shields.io/npm/d18m/better-gemini-mcp?logo=npm)](https://www.npmjs.com/package/better-gemini-mcp)
+[![NPM Version](https://img.shields.io/npm/v/gemini-researcher?logo=npm)](https://www.npmjs.com/package/gemini-researcher)
+[![NPM Downloads](https://img.shields.io/npm/d18m/gemini-researcher?logo=npm)](https://www.npmjs.com/package/gemini-researcher)
 [![License: BSD-3 Claude](https://img.shields.io/badge/License-BSD%203--Clause-white.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 A lightweight, stateless MCP (Model Context Protocol) server that lets developer agents (Claude Code, GitHub Copilot) delegate deep repository analysis to the Gemini CLI. The server is read-only, returns structured JSON (as text content), and is optimized to reduce the calling agent's context and model usage.
@@ -25,12 +25,11 @@ Instead of copying entire files into your agent's context (burning tokens and cl
 
 **Table of contents**
 
-- [Better Gemini MCP](#better-gemini-mcp)
+- [Gemini Researcher](#gemini-researcher)
   - [Overview](#overview)
   - [Prerequisites](#prerequisites)
   - [Quickstart](#quickstart)
     - [Step 1: Validate environment](#step-1-validate-environment)
-    - [Step 2: Choose your installation method](#step-2-choose-your-installation-method)
     - [Step 2: Configure your MCP client](#step-2-configure-your-mcp-client)
     - [Step 3: Restart your MCP client](#step-3-restart-your-mcp-client)
     - [Step 4: Test it](#step-4-test-it)
@@ -42,7 +41,7 @@ Instead of copying entire files into your agent's context (burning tokens and cl
 
 ## Overview
 
-Better Gemini MCP accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless, read-only mode to perform large-context analysis on local files referenced with `@path`. Results are returned as pretty-printed JSON strings suitable for programmatic consumption by agent clients.
+Gemini Researcher accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless, read-only mode to perform large-context analysis on local files referenced with `@path`. Results are returned as pretty-printed JSON strings suitable for programmatic consumption by agent clients.
 
 ## Prerequisites
 - Node.js 18+ installed
@@ -60,7 +59,7 @@ gemini --version
 ### Step 1: Validate environment
 Run the setup wizard to verify Gemini CLI is installed and authenticated:
 ```bash
-npx better-gemini-mcp init
+npx gemini-researcher init
 ```
 
 ### Step 2: Configure your MCP client
@@ -69,10 +68,10 @@ npx better-gemini-mcp init
 ```json
 {
   "mcpServers": {
-    "better-gemini": {
+    "gemini-researcher": {
       "command": "npx",
       "args": [
-        "better-gemini-mcp"
+        "gemini-researcher"
       ]
     }
   }
@@ -86,10 +85,10 @@ Add to your VS Code MCP settings (create `.vscode/mcp.json` if needed):
 ```json
 {
   "servers": {
-    "better-gemini-mcp": {
+    "gemini-researcher": {
       "command": "npx",
       "args": [
-        "better-gemini-mcp"
+        "gemini-researcher"
       ]
     }
   }
@@ -106,7 +105,7 @@ Add to your VS Code MCP settings (create `.vscode/mcp.json` if needed):
 Local (user-wide) scope
 ```bash
 # Add the MCP server via CLI
-claude mcp add --transport stdio better-gemini-mcp -- npx better-gemini-mcp 
+claude mcp add --transport stdio gemini-researcher -- npx gemini-researcher 
 
 # Verify it was added
 claude mcp list
@@ -117,7 +116,7 @@ Project scope
 Navigate to your project directory, then run:
 ```bash
 # Add the MCP server via CLI
-claude mcp add --scope project --transport stdio better-gemini-mcp -- npx better-gemini-mcp
+claude mcp add --scope project --transport stdio gemini-researcher -- npx gemini-researcher
 
 # Verify it was added
 claude mcp list
@@ -129,10 +128,10 @@ Add to `.mcp.json` in your project root (project scope):
 ```json
 {
   "mcpServers": {
-    "better-gemini-mcp": {
+    "gemini-researcher": {
       "command": "npx",
       "args": [
-        "better-gemini-mcp"
+        "gemini-researcher"
       ]
     }
   }
@@ -152,11 +151,11 @@ Go to `Cursor Settings` -> `Tools & MCP` -> `Add a Custom MCP Server`. Add the f
 ```json
 {
   "mcpServers": {
-    "better-gemini-mcp": {
+    "gemini-researcher": {
       "type": "stdio",
       "command": "npx",
       "args": [
-        "better-gemini-mcp"
+        "gemini-researcher"
       ]
     }
   }
@@ -172,10 +171,10 @@ Example
 ```json
 {
   "mcpServers": {
-    "better-gemini-mcp": {
+    "gemini-researcher": {
       "command": "npx",
       "args": [
-        "better-gemini-mcp"
+        "gemini-researcher"
       ],
       "env": {
         "PROJECT_ROOT": "/path/to/your/project"
@@ -188,7 +187,7 @@ Example
 ### Step 3: Restart your MCP client
 
 ### Step 4: Test it
-Ask your agent: "Use better-gemini-mcp to analyze the project."
+Ask your agent: "Use gemini-researcher to analyze the project."
 
 ## Tools
 

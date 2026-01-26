@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Response Chunking**: Automatic chunking of responses exceeding 10KB with cache-based retrieval
 - **Path Security**: Project root restriction, directory traversal prevention, `@path` validation
 - **Ignore Patterns**: Respects `.gitignore` plus hard-coded exclusions (node_modules, .git, dist, etc.)
-- **Setup Wizard**: `npx better-gemini-mcp init` for guided environment validation
+- **Setup Wizard**: `npx gemini-researcher init` for guided environment validation
 - **Progress Notifications**: Keepalive updates every 25 seconds for long-running operations
 - **Structured JSON Responses**: All tools return parseable JSON with consistent error format
 

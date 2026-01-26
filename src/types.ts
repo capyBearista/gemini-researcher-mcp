@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript types for Better Gemini MCP Server
+ * Shared TypeScript types for Gemini Researcher Server
  */
 
 import type { ErrorCode } from "./constants.js";

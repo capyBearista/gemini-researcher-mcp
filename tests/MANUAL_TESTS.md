@@ -1,6 +1,6 @@
 # Manual Testing Checklist
 
-This document provides a comprehensive checklist for manual testing of the Better Gemini MCP server before release.
+This document provides a comprehensive checklist for manual testing of the Gemini Researcher server before release.
 
 ## Prerequisites
 
@@ -30,9 +30,9 @@ Before running manual tests, ensure:
    ```json
    {
      "mcpServers": {
-       "better-gemini-mcp": {
+       "gemini-researcher": {
          "command": "npx",
-         "args": ["better-gemini-mcp"]
+         "args": ["gemini-researcher"]
        }
      }
    }
@@ -44,7 +44,7 @@ Before running manual tests, ensure:
 | Test | Steps | Expected Result | ✓/✗ |
 |------|-------|-----------------|-----|
 | Server connection | Open Claude Desktop, check MCP status | Server shows as connected | |
-| List tools | Ask "What tools do you have available?" | Should list 6 better-gemini-mcp tools | |
+| List tools | Ask "What tools do you have available?" | Should list 6 gemini-researcher tools | |
 | Quick query | Ask to analyze a file using quick_query | Returns structured JSON response | |
 | Deep research | Ask for deep analysis of code architecture | Returns detailed analysis | |
 | Health check | Ask to check Gemini MCP health | Returns status OK with diagnostics | |
@@ -58,9 +58,9 @@ Before running manual tests, ensure:
    ```json
    {
      "mcp.servers": {
-       "better-gemini-mcp": {
+       "gemini-researcher": {
          "command": "npx",
-         "args": ["better-gemini-mcp"]
+         "args": ["gemini-researcher"]
        }
      }
    }
@@ -100,7 +100,7 @@ Navigate to a large project (e.g., a project with >500 files)
 | Test | Steps | Expected Result | ✓/✗ |
 |------|-------|-----------------|-----|
 | Independent calls | Make two quick_query calls | Each returns complete, independent result | |
-| No session files | Check for session files after calls | No `.better-gemini-mcp/sessions/` created | |
+| No session files | Check for session files after calls | No `.gemini-researcher/sessions/` created | |
 | Context not preserved | Ask followup without context | Server doesn't remember previous query | |
 
 ---
@@ -159,7 +159,7 @@ Use a query that produces very large output (>10KB)
 
 | Test | Steps | Expected Result | ✓/✗ |
 |------|-------|-----------------|-----|
-| Fresh setup | Run `npx better-gemini-mcp init` | Shows wizard steps 1-3 | |
+| Fresh setup | Run `npx gemini-researcher init` | Shows wizard steps 1-3 | |
 | Gemini missing | Temporarily remove gemini from PATH | Shows install instructions | |
 | Auth missing | Unset GEMINI_API_KEY, no login | Shows auth setup options | |
 | Complete setup | With valid Gemini + auth | Shows "Setup Complete!" + next steps | |

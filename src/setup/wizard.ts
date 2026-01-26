@@ -1,5 +1,5 @@
 /**
- * Setup Wizard for Better Gemini MCP Server
+ * Setup Wizard for Gemini Researcher Server
  * Guides first-time users through validating their environment
  * and configuring Gemini CLI authentication.
  */

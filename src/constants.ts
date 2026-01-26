@@ -1,5 +1,5 @@
 /**
- * Constants for Better Gemini MCP Server
+ * Constants for Gemini Researcher Server
  * Error codes, model configurations, system prompt, and protocol constants
  */
 
@@ -226,7 +226,7 @@ OUTPUT FORMAT:
 // ============================================================================
 
 export const SERVER_INFO = {
-  NAME: "better-gemini-mcp",
+  NAME: "gemini-researcher",
   VERSION: "1.0.2",
   DESCRIPTION: "Stateless MCP server that proxies research queries to Gemini CLI",
 } as const;
@@ -237,7 +237,7 @@ export const SERVER_INFO = {
 
 export const WIZARD_MESSAGES = {
   HEADER: `
-Better Gemini MCP — Setup Wizard
+Gemini Researcher — Setup Wizard
 ================================
 `,
   SUCCESS_HEADER: `
@@ -282,11 +282,11 @@ Next steps:
 3. Restart your MCP client
 4. Test with: "Can you list your available tools?"
 
-Documentation: https://github.com/capyBearista/better-gemini-mcp
+Documentation: https://github.com/capyBearista/gemini-researcher
 `,
 
   FIX_ISSUES: `
-Please fix the issues above and run 'npx better-gemini-mcp init' again.
+Please fix the issues above and run 'npx gemini-researcher init' again.
 `,
 
   // Startup validation messages
@@ -294,11 +294,11 @@ Please fix the issues above and run 'npx better-gemini-mcp init' again.
   STARTUP_GEMINI_NOT_FOUND: `❌ Gemini CLI not found on PATH
 → Install: npm install -g @google/gemini-cli
 → Docs: https://github.com/google-gemini/gemini-cli
-→ Run 'npx better-gemini-mcp init' for guided setup`,
+→ Run 'npx gemini-researcher init' for guided setup`,
   STARTUP_AUTH_MISSING: `❌ Gemini CLI authentication not configured
 → Recommended: Run 'gemini' and select "Login with Google"
 → Alternative: Set GEMINI_API_KEY environment variable
    - Get API key: https://aistudio.google.com/app/apikey
    - Set in terminal: export GEMINI_API_KEY="your-key-here"
-→ Run 'npx better-gemini-mcp init' for guided setup`,
+→ Run 'npx gemini-researcher init' for guided setup`,
 } as const;

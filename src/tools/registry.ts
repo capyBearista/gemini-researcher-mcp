@@ -1,5 +1,5 @@
 /**
- * Tool Registry for Better Gemini MCP Server
+ * Tool Registry for Gemini Researcher Server
  * Defines the UnifiedTool interface and provides tool execution functionality
  */
 

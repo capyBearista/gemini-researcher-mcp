@@ -1,5 +1,5 @@
 /**
- * Tool Registry Exports for Better Gemini MCP Server
+ * Tool Registry Exports for Gemini Researcher Server
  *
  * This file registers all tools and exports registry functions.
  * Tools are imported and added to the toolRegistry array here.

@@ -1,5 +1,5 @@
 /**
- * Utility module exports for Better Gemini MCP Server
+ * Utility module exports for Gemini Researcher Server
  */
 
 // Logging
