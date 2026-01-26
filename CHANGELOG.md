@@ -5,13 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-01-26
+
+### Added
+
+- **Docker support**: New Dockerfile and `.dockerignore` for containerized deployment.
+  - See README for Docker usage instructions.
+- Command timeout option for `executeCommand` utility (internal API improvement).
+- MCP registry metadata files (`server.json`, `glama.json`) for discoverability.
 
 ### Changed
 
+- **Project renamed** from "Better Gemini MCP" to "Gemini Researcher" across all documentation and code.
 - Startup logs changed from INFO to DEBUG level for silent MCP server operation by default.
   - Fixes "Server not inspectable" issue on Glama.ai and other MCP registries.
   - Set `DEBUG=true` environment variable to see startup logs for troubleshooting.
+- Enhanced type definitions and response structures across tools for better type safety.
+- Improved integration tests with Gemini CLI availability checks.
+- Reorganized test files into `tests/manual/` directory.
+- Documentation cleanup: removed obsolete review documents, updated PRD status values.
+
+### Fixed
+
+- Repository URL format in `package.json`.
 
 ## [1.0.2] - 2026-01-12
 
