@@ -325,7 +325,7 @@ async function performStartupValidation(): Promise<boolean> {
     return false;
   }
 
-  logInfo(WIZARD_MESSAGES.STARTUP_SUCCESS);
+  logDebug(WIZARD_MESSAGES.STARTUP_SUCCESS);
   return true;
 }
 
@@ -346,7 +346,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  logInfo(`Initializing ${SERVER_INFO.NAME} v${SERVER_INFO.VERSION}`);
+  logDebug(`Initializing ${SERVER_INFO.NAME} v${SERVER_INFO.VERSION}`);
 
   // Create stdio transport
   const transport = new StdioServerTransport();
@@ -354,7 +354,7 @@ async function main(): Promise<void> {
   // Connect server to transport
   await server.connect(transport);
 
-  logInfo(`${SERVER_INFO.NAME} listening on stdio`);
+  logDebug(`${SERVER_INFO.NAME} listening on stdio`);
 }
 
 // Start the server
