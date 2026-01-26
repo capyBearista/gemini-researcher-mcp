@@ -1,6 +1,6 @@
 # Manual Testing Checklist
 
-This document provides a comprehensive checklist for manual testing of the Gemini Researcher server before release.
+This checklist is for humans to manually validate the Gemini Researcher MCP server before release.
 
 ## Prerequisites
 
@@ -8,13 +8,15 @@ Before running manual tests, ensure:
 
 1. **Gemini CLI is installed:**
    ```bash
-   which gemini  # Should return path
-   gemini --version
+  which gemini  # (Windows: where gemini)
+  gemini --version
    ```
 
 2. **Authentication is configured:**
-   - Run `gemini` and authenticate with Google, OR
-   - Set `GEMINI_API_KEY` environment variable
+  - Recommended: run `gemini` once and login with Google
+  - Alternative (CI / automation): set `GEMINI_API_KEY`
+
+  If you’re using Gemini 3 preview models, ensure Gemini CLI Preview Features are enabled (`gemini` → `/settings`).
 
 3. **MCP server builds successfully:**
    ```bash
@@ -23,56 +25,48 @@ Before running manual tests, ensure:
 
 ---
 
-## 1. Claude Code Integration
+## 0. Local stdio smoke test (no client)
 
-### Setup
-1. Add to `~/.config/Claude/claude_desktop_config.json`:
-   ```json
-   {
-     "mcpServers": {
-       "gemini-researcher": {
-         "command": "npx",
-         "args": ["gemini-researcher"]
-       }
-     }
-   }
-   ```
-2. Restart Claude Desktop
+If you want to run the MCP server directly and paste JSON-RPC requests by hand:
 
-### Tests
+```bash
+./tests/manual/test-mcp-manual.sh
+```
 
-| Test | Steps | Expected Result | ✓/✗ |
-|------|-------|-----------------|-----|
-| Server connection | Open Claude Desktop, check MCP status | Server shows as connected | |
-| List tools | Ask "What tools do you have available?" | Should list 6 gemini-researcher tools | |
-| Quick query | Ask to analyze a file using quick_query | Returns structured JSON response | |
-| Deep research | Ask for deep analysis of code architecture | Returns detailed analysis | |
-| Health check | Ask to check Gemini MCP health | Returns status OK with diagnostics | |
+Example requests you can paste into stdin:
+
+- List tools:
+  ```json
+  {"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}
+  ```
+
+- Run health check:
+  ```json
+  {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"health_check","arguments":{"includeDiagnostics":true}}}
+  ```
+
+Exit with `Ctrl+C`.
 
 ---
 
-## 2. VS Code Copilot Integration
+## 1. MCP client integration
 
 ### Setup
-1. Add MCP server to VS Code settings or `.vscode/mcp-settings.json`:
-   ```json
-   {
-     "mcp.servers": {
-       "gemini-researcher": {
-         "command": "npx",
-         "args": ["gemini-researcher"]
-       }
-     }
-   }
-   ```
-2. Reload VS Code window
+Follow the client setup instructions in the project README (recommended source of truth).
 
 ### Tests
 
 | Test | Steps | Expected Result | ✓/✗ |
 |------|-------|-----------------|-----|
-| Server connection | Check MCP extension status | Server shows as connected | |
-| Tool invocation | Use Copilot to invoke quick_query | Tool executes successfully | |
+| Server connection | Confirm MCP client shows server connected | Server shows as connected | |
+| List tools | Ask "What tools do you have available?" | Should list 6 gemini-researcher tools | |
+| Quick query | Ask to analyze a file using quick_query | Returns structured JSON response | |
+| Deep research | Ask for deep analysis of code architecture | Returns detailed analysis | |
+| Health check | Ask to check Gemini MCP health | Returns `status: ok` when Gemini is available; otherwise `degraded` with warnings | |
+
+---
+
+Note: VS Code MCP configuration formats vary by client/extension; use the README’s VS Code config example.
 
 ---
 
@@ -85,8 +79,8 @@ Navigate to a large project (e.g., a project with >500 files)
 
 | Test | Steps | Expected Result | ✓/✗ |
 |------|-------|-----------------|-----|
-| Default limit | Run `analyze_directory` on root | Returns ≤500 files, truncated=true | |
-| Custom limit | Run with `maxFiles: 100` | Returns ≤100 files | |
+| Default limit | Run `analyze_directory` on root | Returns ≤500 files; `meta.warnings` may mention hitting the limit | |
+| Custom limit | Run with `maxFiles: 100` | Returns ≤100 files; `meta.fileCount` matches | |
 | Depth limit | Run with `depth: 2` | Only files within 2 levels | |
 | Ignore patterns | Check node_modules excluded | node_modules files not in results | |
 | .gitignore respect | Add pattern to .gitignore | Pattern respected in results | |
@@ -227,11 +221,3 @@ When reporting test failures, include:
 4. **Expected result:** What should happen
 5. **Actual result:** What actually happened
 6. **Logs:** Any error messages or output
-
----
-
-## Sign-off
-
-| Tester | Date | Version | All Tests Pass |
-|--------|------|---------|----------------|
-| | | 1.0.0 | ☐ |

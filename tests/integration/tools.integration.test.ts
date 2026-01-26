@@ -22,6 +22,8 @@ describe("Tool Integration Tests", () => {
   const testDir = path.join(os.tmpdir(), "test-tools-integration-" + Date.now());
   const originalCwd = process.cwd();
   const originalProjectRoot = process.env.PROJECT_ROOT;
+  const originalGeminiApiKey = process.env.GEMINI_API_KEY;
+  const originalPath = process.env.PATH;
 
   beforeEach(() => {
     // Create test directory structure
@@ -37,6 +39,16 @@ describe("Tool Integration Tests", () => {
     // Set PROJECT_ROOT for tests
     process.env.PROJECT_ROOT = testDir;
 
+    // Make tests hermetic: do not allow spawning the real Gemini CLI.
+    // These integration tests validate our tool wiring + JSON shapes, not Gemini availability.
+    // Keep `which`/`where` available while excluding user-level Node/NVM bins.
+    if (process.platform === "win32") {
+      const systemRoot = process.env.SystemRoot || "C:\\Windows";
+      process.env.PATH = `${systemRoot}\\System32`;
+    } else {
+      process.env.PATH = "/usr/bin:/bin";
+    }
+
     // Clear cache
     clearCache();
   });
@@ -47,6 +59,20 @@ describe("Tool Integration Tests", () => {
       process.env.PROJECT_ROOT = originalProjectRoot;
     } else {
       delete process.env.PROJECT_ROOT;
+    }
+
+    // Restore GEMINI_API_KEY
+    if (originalGeminiApiKey !== undefined) {
+      process.env.GEMINI_API_KEY = originalGeminiApiKey;
+    } else {
+      delete process.env.GEMINI_API_KEY;
+    }
+
+    // Restore PATH
+    if (originalPath !== undefined) {
+      process.env.PATH = originalPath;
+    } else {
+      delete process.env.PATH;
     }
 
     // Clean up test directory
@@ -270,25 +296,16 @@ describe("Tool Integration Tests", () => {
     });
 
     it("should accept valid prompt with focus", async () => {
-      // This will fail because Gemini CLI isn't available in test,
-      // but we can verify the validation passes
-      try {
-        await executeTool("quick_query", {
-          prompt: "What is the purpose of src/index.ts?",
-          focus: "architecture",
-          responseStyle: "concise",
-        });
-      } catch (error) {
-        // Expected to fail at Gemini CLI invocation
-        // But should not fail at validation
-        const message = error instanceof Error ? error.message : String(error);
+      // We validate that schema + @path validation passes, then fails fast when Gemini CLI is unavailable.
+      const result = await executeTool("quick_query", {
+        prompt: "What is the purpose of src/index.ts?",
+        focus: "architecture",
+        responseStyle: "concise",
+      });
 
-        // Should not be a validation error
-        assert.ok(
-          !message.includes("INVALID_ARGUMENT") && !message.includes("PATH_NOT_ALLOWED"),
-          "Should pass validation"
-        );
-      }
+      const parsed = JSON.parse(result);
+      assert.ok(parsed.error, "Should return an error when Gemini CLI is unavailable in tests");
+      assert.strictEqual(parsed.error.code, "GEMINI_CLI_NOT_FOUND");
     });
   });
 

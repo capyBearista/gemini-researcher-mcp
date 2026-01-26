@@ -5,7 +5,7 @@
  * Implements a 3-tier model fallback strategy for resilience.
  */
 
-import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES } from "../constants.js";
+import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES, MODELS } from "../constants.js";
 import { Logger } from "./logger.js";
 import { executeCommand, commandExists, getCommandVersion } from "./commandExecutor.js";
 import type { ProgressCallback } from "../types.js";
@@ -333,6 +333,10 @@ export async function checkGeminiAuth(): Promise<{
   // Try a minimal test invocation to check for Google login session
   try {
     await executeCommand(CLI.COMMANDS.GEMINI, [
+      // Force a broadly-available model for this probe so health checks don't hang
+      // when preview models have poor availability.
+      CLI.FLAGS.MODEL,
+      MODELS.FLASH_FALLBACK,
       CLI.FLAGS.PROMPT,
       "test",
       CLI.FLAGS.OUTPUT_FORMAT,

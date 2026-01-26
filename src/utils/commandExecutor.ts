@@ -17,7 +17,8 @@ import { Logger } from "./logger.js";
 export async function executeCommand(
   command: string,
   args: string[],
-  onProgress?: (newOutput: string) => void
+  onProgress?: (newOutput: string) => void,
+  options?: { timeoutMs?: number }
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
@@ -33,6 +34,21 @@ export async function executeCommand(
     let stderr = "";
     let isResolved = false;
     let lastReportedLength = 0;
+    const timeoutMs = options?.timeoutMs;
+    const timeoutHandle =
+      typeof timeoutMs === "number" && timeoutMs > 0
+        ? setTimeout(() => {
+            if (!isResolved) {
+              isResolved = true;
+              try {
+                childProcess.kill("SIGKILL");
+              } catch {
+                // ignore
+              }
+              reject(new Error(`Command timed out after ${timeoutMs}ms: ${command}`));
+            }
+          }, timeoutMs)
+        : null;
 
     // Handle stdout data
     childProcess.stdout.on("data", (data: Buffer) => {
@@ -56,6 +72,7 @@ export async function executeCommand(
     childProcess.on("error", (error: Error) => {
       if (!isResolved) {
         isResolved = true;
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         Logger.error(`Process error: ${error.message}`);
         reject(new Error(`Failed to spawn command '${command}': ${error.message}`));
       }
@@ -65,6 +82,7 @@ export async function executeCommand(
     childProcess.on("close", (code: number | null) => {
       if (!isResolved) {
         isResolved = true;
+        if (timeoutHandle) clearTimeout(timeoutHandle);
 
         if (code === 0) {
           Logger.commandComplete(startTime, code, stdout.length);
