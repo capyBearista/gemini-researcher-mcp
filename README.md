@@ -31,9 +31,9 @@ Instead of copying entire files into your agent's context (burning tokens and cl
   - [Quickstart](#quickstart)
     - [Step 1: Validate environment](#step-1-validate-environment)
     - [Step 2: Choose your installation method](#step-2-choose-your-installation-method)
-    - [Step 3: Configure your MCP client](#step-3-configure-your-mcp-client)
-    - [Step 4: Restart your MCP client](#step-4-restart-your-mcp-client)
-    - [Step 5: Test it](#step-5-test-it)
+    - [Step 2: Configure your MCP client](#step-2-configure-your-mcp-client)
+    - [Step 3: Restart your MCP client](#step-3-restart-your-mcp-client)
+    - [Step 4: Test it](#step-4-test-it)
   - [Tools](#tools)
     - [Example workflows](#example-workflows)
   - [Troubleshooting (common issues)](#troubleshooting-common-issues)
@@ -63,21 +63,7 @@ Run the setup wizard to verify Gemini CLI is installed and authenticated:
 npx better-gemini-mcp init
 ```
 
-### Step 2: Choose your installation method
-
-**Option A: Try it without installing (npx)**
-```bash
-# Server starts automatically when your MCP client connects
-# Use this in your MCP client config (see Step 3)
-```
-
-**Option B: Install globally**
-```bash
-npm install -g better-gemini-mcp
-better-gemini-mcp  # Run manually or via MCP client config
-```
-
-### Step 3: Configure your MCP client
+### Step 2: Configure your MCP client
 
 **Standard config** works in most of the tools:
 ```json
@@ -199,9 +185,9 @@ Example
 }
 ```
 
-### Step 4: Restart your MCP client
+### Step 3: Restart your MCP client
 
-### Step 5: Test it
+### Step 4: Test it
 Ask your agent: "Use better-gemini-mcp to analyze the project."
 
 ## Tools
