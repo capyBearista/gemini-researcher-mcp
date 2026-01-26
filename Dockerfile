@@ -18,7 +18,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build
 # -----------------------------------------------------------------------------
-FROM node:22-slim AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -38,12 +38,10 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Stage 2: Production
 # -----------------------------------------------------------------------------
-FROM node:22-slim AS production
+FROM node:22-alpine AS production
 
 # Install git (required for .gitignore parsing by the 'ignore' package)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache git
 
 WORKDIR /app
 
@@ -52,6 +50,9 @@ COPY package.json package-lock.json* ./
 
 # Install production dependencies only
 RUN npm ci --omit=dev
+
+# Update npm to latest version to fix security vulnerabilities (CVE-2026-23950, CVE-2026-23745, CVE-2025-64756)
+RUN npm install -g npm@latest && npm cache clean --force
 
 # Install Gemini CLI globally (required for proxying queries)
 RUN npm install -g @google/gemini-cli

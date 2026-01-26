@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-01-26
+
+### ⚠️ Docker-only release (npm package unchanged at 1.1.1)
+
+This release addresses security vulnerabilities in the Docker image only. If you use the npm package (`npx gemini-researcher`), you are unaffected and do not need to update.
+
+### Security
+
+- Addressed security vulnerabilities in bundled npm packages, as reported by Docker Scout:
+  - CVE-2026-23950, CVE-2026-23745 (tar)
+  - CVE-2025-64756 (glob)
+- Updated bundled npm from 10.9.4 to 11.8.0 (includes patched tar and glob)
+
+### Changed
+
+- **Docker base image**: Switched from `node:22-bookworm-slim` (Debian) to `node:22-alpine`
+  - Reduced image size from 257 MB to 213 MB
+  - Reduced total packages from 874 to 726
+  - Reduced LOW severity CVEs from 48 to 2
+
+### Note
+
+- 5 MEDIUM severity CVEs remain in Alpine base packages (curl, busybox) with no upstream fixes available. These are transitive dependencies in the base image, not in application code.
+
 ## [1.1.1] - 2026-01-26
 
 ### Added
