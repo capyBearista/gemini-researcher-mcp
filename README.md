@@ -3,6 +3,7 @@
 [![NPM Version](https://img.shields.io/npm/v/gemini-researcher?logo=npm)](https://www.npmjs.com/package/gemini-researcher)
 [![NPM Downloads](https://img.shields.io/npm/d18m/gemini-researcher?logo=npm)](https://www.npmjs.com/package/gemini-researcher)
 [![License: BSD-3 Claude](https://img.shields.io/badge/License-BSD%203--Clause-white.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 <a href="https://glama.ai/mcp/servers/@capyBearista/gemini-researcher">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@capyBearista/gemini-researcher/badge" />
 </a>
