@@ -10,8 +10,10 @@ import {
   checkGeminiAuth,
   getReadOnlyPolicyPath,
   hasReadOnlyPolicyFile,
+  isAuthRelatedErrorMessage,
   isAdminPolicyEnforced,
   supportsAdminPolicyFlag,
+  supportsRequiredOutputFormats,
 } from "../utils/geminiExecutor.js";
 
 // ============================================================================
@@ -208,12 +210,7 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Check if error is likely auth-related
-    const lowered = errorMessage.toLowerCase();
-    const isAuthError =
-      lowered.includes("auth") ||
-      lowered.includes("login") ||
-      lowered.includes("credential") ||
-      lowered.includes("unauthenticated");
+    const isAuthError = isAuthRelatedErrorMessage(errorMessage);
     const isAuthUnknown = !isAuthError;
 
     return {
@@ -333,6 +330,15 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
     return {
       valid: false,
       error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_UNSUPPORTED,
+    };
+  }
+
+  // Verify Gemini CLI supports required output formats (json + stream-json)
+  const hasRequiredOutputFormats = await supportsRequiredOutputFormats();
+  if (!hasRequiredOutputFormats) {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_OUTPUT_FORMAT_UNSUPPORTED,
     };
   }
 

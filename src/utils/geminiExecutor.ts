@@ -54,8 +54,15 @@ const ADMIN_POLICY_ENFORCEMENT_ENV = "GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY";
 const ADMIN_POLICY_HELP_TIMEOUT_MS = 5000;
 const AUTH_PROBE_TIMEOUT_MS = 120000;
 const AUTH_PROBE_PROMPT = "Respond with exactly OK. Do not call any tools.";
+const REQUIRED_OUTPUT_FORMATS = [CLI.OUTPUT_FORMATS.JSON, CLI.OUTPUT_FORMATS.STREAM_JSON] as const;
+const AUTH_ERROR_HINTS = ["auth", "login", "credential", "unauthenticated", "permission denied"] as const;
 
 export type AuthStatus = "configured" | "unauthenticated" | "unknown";
+
+interface GeminiCliCapabilities {
+  hasAdminPolicyFlag: boolean;
+  outputFormatChoices: string[];
+}
 
 type ExecuteCommandFn = typeof executeCommand;
 
@@ -87,16 +94,67 @@ export function isAdminPolicyEnforced(): boolean {
   return !(normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off");
 }
 
-export async function supportsAdminPolicyFlag(deps?: GeminiExecutorDeps): Promise<boolean> {
+export function isAuthRelatedErrorMessage(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return AUTH_ERROR_HINTS.some((hint) => lowered.includes(hint));
+}
+
+function extractOutputFormatChoices(helpText: string): string[] {
+  const outputFormatLine = helpText
+    .split(/\r?\n/)
+    .find((line) => line.toLowerCase().includes(CLI.FLAGS.OUTPUT_FORMAT));
+
+  if (!outputFormatLine) {
+    return [];
+  }
+
+  const choicesMatch = outputFormatLine.match(/\[choices:\s*([^\]]+)\]/i);
+  if (!choicesMatch) {
+    return [];
+  }
+
+  const rawChoices = choicesMatch[1];
+  const quotedChoices = [...rawChoices.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  if (quotedChoices.length > 0) {
+    return quotedChoices;
+  }
+
+  return rawChoices
+    .split(",")
+    .map((choice) => choice.trim().replace(/^['"]|['"]$/g, ""))
+    .filter((choice) => choice.length > 0);
+}
+
+async function getGeminiCliCapabilities(deps?: GeminiExecutorDeps): Promise<GeminiCliCapabilities | null> {
   const runCommand = deps?.executeCommandFn ?? executeCommand;
+
   try {
     const helpText = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP], undefined, {
       timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
     });
-    return helpText.includes(CLI.FLAGS.ADMIN_POLICY);
+
+    return {
+      hasAdminPolicyFlag: helpText.includes(CLI.FLAGS.ADMIN_POLICY),
+      outputFormatChoices: extractOutputFormatChoices(helpText),
+    };
   } catch {
+    return null;
+  }
+}
+
+export async function supportsAdminPolicyFlag(deps?: GeminiExecutorDeps): Promise<boolean> {
+  const capabilities = await getGeminiCliCapabilities(deps);
+  return capabilities?.hasAdminPolicyFlag ?? false;
+}
+
+export async function supportsRequiredOutputFormats(deps?: GeminiExecutorDeps): Promise<boolean> {
+  const capabilities = await getGeminiCliCapabilities(deps);
+  if (!capabilities) {
     return false;
   }
+
+  const available = new Set(capabilities.outputFormatChoices.map((choice) => choice.toLowerCase()));
+  return REQUIRED_OUTPUT_FORMATS.every((requiredFormat) => available.has(requiredFormat));
 }
 
 // ============================================================================
@@ -416,13 +474,7 @@ export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    const lowered = message.toLowerCase();
-    const isAuthFailure =
-      lowered.includes("auth") ||
-      lowered.includes("login") ||
-      lowered.includes("credential") ||
-      lowered.includes("unauthenticated") ||
-      lowered.includes("permission denied");
+    const isAuthFailure = isAuthRelatedErrorMessage(message);
 
     if (isAuthFailure) {
       return { configured: false, status: "unauthenticated", reason: message };

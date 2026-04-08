@@ -16,6 +16,7 @@ import {
   hasReadOnlyPolicyFile,
   isAdminPolicyEnforced,
   supportsAdminPolicyFlag,
+  supportsRequiredOutputFormats,
   getProjectRoot,
   Logger,
 } from "../utils/index.js";
@@ -85,6 +86,7 @@ export const healthCheckTool: UnifiedTool = {
       const enforceAdminPolicy = isAdminPolicyEnforced();
       const policyFilePresent = hasReadOnlyPolicyFile();
       const adminPolicySupported = geminiOnPath && enforceAdminPolicy ? await supportsAdminPolicyFlag() : true;
+      const requiredOutputFormatsSupported = geminiOnPath ? await supportsRequiredOutputFormats() : false;
       if (geminiOnPath) {
         const auth = await checkGeminiAuth();
         authConfigured = auth.configured;
@@ -109,6 +111,9 @@ export const healthCheckTool: UnifiedTool = {
       if (enforceAdminPolicy && geminiOnPath && !adminPolicySupported) {
         warnings.push("Gemini CLI does not support --admin-policy. Upgrade to v0.36.0 or newer.");
       }
+      if (geminiOnPath && !requiredOutputFormatsSupported) {
+        warnings.push("Gemini CLI does not support required output formats (json, stream-json). Upgrade to v0.36.0 or newer.");
+      }
       if (!enforceAdminPolicy) {
         warnings.push("Strict admin policy enforcement disabled by GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0.");
       }
@@ -127,7 +132,10 @@ export const healthCheckTool: UnifiedTool = {
 
       // Determine overall status
       const status: HealthCheckResponse["status"] =
-        geminiOnPath && authConfigured && (!enforceAdminPolicy || (policyFilePresent && adminPolicySupported))
+        geminiOnPath &&
+        requiredOutputFormatsSupported &&
+        authConfigured &&
+        (!enforceAdminPolicy || (policyFilePresent && adminPolicySupported))
           ? "ok"
           : "degraded";
 

@@ -23,6 +23,8 @@ export {
   hasReadOnlyPolicyFile,
   isAdminPolicyEnforced,
   supportsAdminPolicyFlag,
+  supportsRequiredOutputFormats,
+  isAuthRelatedErrorMessage,
   type AuthStatus,
   type GeminiResponse,
   type ToolName,

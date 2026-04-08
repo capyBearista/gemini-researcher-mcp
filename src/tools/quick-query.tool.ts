@@ -17,6 +17,7 @@ import {
   chunkResponse,
   needsChunking,
   cacheResponse,
+  isAuthRelatedErrorMessage,
   Logger,
 } from "../utils/index.js";
 
@@ -173,7 +174,7 @@ export const quickQueryTool: UnifiedTool = {
       if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
         code = ERROR_CODES.GEMINI_CLI_NOT_FOUND;
         nextStep = "Install Gemini CLI: npm install -g @google/gemini-cli, or run setup wizard: npx gemini-researcher init";
-      } else if (errorMessage.includes("auth") || errorMessage.includes("login")) {
+      } else if (isAuthRelatedErrorMessage(errorMessage)) {
         code = ERROR_CODES.AUTH_MISSING;
         nextStep = "Authenticate Gemini CLI: run 'gemini' and select 'Login with Google', or set GEMINI_API_KEY environment variable";
       } else if (errorMessage.includes("quota")) {

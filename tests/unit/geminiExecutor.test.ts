@@ -9,6 +9,8 @@ import {
   checkGeminiAuth,
   isAdminPolicyEnforced,
   getReadOnlyPolicyPath,
+  isAuthRelatedErrorMessage,
+  supportsRequiredOutputFormats,
 } from "../../src/utils/geminiExecutor.js";
 import { MODELS } from "../../src/constants.js";
 
@@ -249,6 +251,17 @@ describe("checkGeminiAuth behavior", () => {
     assert.ok(typeof auth.reason === "string");
   });
 
+  it("classifies permission denied failures as unauthenticated", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error("Permission denied: cannot access keychain");
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(auth.configured, false);
+    assert.strictEqual(auth.status, "unauthenticated");
+  });
+
   it("classifies ambiguous failures as unknown", async () => {
     const mockExecuteCommand: ExecuteCommandMock = async () => {
       throw new Error("Temporary network failure");
@@ -259,6 +272,38 @@ describe("checkGeminiAuth behavior", () => {
     assert.strictEqual(auth.configured, false);
     assert.strictEqual(auth.status, "unknown");
     assert.ok(typeof auth.reason === "string");
+  });
+});
+
+describe("auth error classifier", () => {
+  it("detects auth-like error messages consistently", () => {
+    assert.strictEqual(isAuthRelatedErrorMessage("Unauthenticated: login required"), true);
+    assert.strictEqual(isAuthRelatedErrorMessage("Permission denied while loading credentials"), true);
+    assert.strictEqual(isAuthRelatedErrorMessage("Temporary network failure"), false);
+  });
+});
+
+describe("output format capability checks", () => {
+  it("returns true when help shows both json and stream-json output formats", async () => {
+    const mockHelp = `
+Options:
+  -o, --output-format  The format of the CLI output. [string] [choices: "text", "json", "stream-json"]
+`;
+
+    const mockExecuteCommand: ExecuteCommandMock = async () => mockHelp;
+    const supported = await supportsRequiredOutputFormats({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(supported, true);
+  });
+
+  it("returns false when stream-json is missing from help output choices", async () => {
+    const mockHelp = `
+Options:
+  -o, --output-format  The format of the CLI output. [string] [choices: "text", "json"]
+`;
+
+    const mockExecuteCommand: ExecuteCommandMock = async () => mockHelp;
+    const supported = await supportsRequiredOutputFormats({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(supported, false);
   });
 });
 

@@ -53,6 +53,8 @@ export const ERROR_MESSAGES = {
     "Gemini CLI read-only admin policy not found. Reinstall package or verify policies/read-only-enforcement.toml exists.",
   ADMIN_POLICY_UNSUPPORTED:
     "Gemini CLI version does not support --admin-policy. Upgrade to Gemini CLI v0.36.0 or newer.",
+  OUTPUT_FORMAT_UNSUPPORTED:
+    "Gemini CLI version does not support required --output-format values (json, stream-json). Upgrade Gemini CLI.",
   PATH_NOT_ALLOWED: "Path is outside project root",
   CACHE_EXPIRED: "Cache key not found or expired. Re-run original query to regenerate response.",
   INVALID_CHUNK_INDEX: "Requested chunk index out of range",
@@ -324,6 +326,10 @@ Please fix the issues above and run 'npx gemini-researcher init' again.
 → Upgrade Gemini CLI to v0.36.0 or newer
 → Current command: gemini --help
 → Run 'npx gemini-researcher init' after upgrade`,
+  STARTUP_OUTPUT_FORMAT_UNSUPPORTED: `❌ Gemini CLI does not support required output formats
+→ Required: --output-format json and --output-format stream-json
+→ Verify with: gemini --help
+→ Upgrade Gemini CLI to v0.36.0 or newer`,
   STARTUP_ADMIN_POLICY_RELAXED: `⚠ Strict admin policy enforcement disabled by GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0
 → Server will continue without hard-failing admin policy checks
 → This weakens fail-closed safety guarantees`,
