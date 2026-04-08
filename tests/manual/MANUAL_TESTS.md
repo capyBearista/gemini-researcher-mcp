@@ -47,6 +47,38 @@ Example requests you can paste into stdin:
 
 Exit with `Ctrl+C`.
 
+### Automated live smoke (real MCP + real Gemini CLI)
+
+Run the full live sign-off flow (heavy profile by default, hard-fail, deterministic chunking):
+
+```bash
+npm run test:smoke:live
+```
+
+Use the faster profile when you only need core smoke coverage:
+
+```bash
+npm run test:smoke:live -- --profile fast
+```
+
+Profile options:
+
+- `heavy` (default): includes deep_research, fetch_chunk continuation, and analyze_directory inventory checks.
+- `fast`: skips heavy long-running checks and runs core MCP/health/query/security/error-shape validations.
+
+What this validates automatically:
+
+- MCP initialize + `tools/list`
+- `health_check` with diagnostics
+- `quick_query`
+- `deep_research` with chunking + `fetch_chunk`
+- `analyze_directory`
+- `validate_paths` security behavior
+- `quick_query` `@path` traversal blocking
+- structured error shape from `fetch_chunk`
+
+The script prints a final sign-off matrix and exits non-zero on first failure.
+
 ---
 
 ## 1. MCP client integration
