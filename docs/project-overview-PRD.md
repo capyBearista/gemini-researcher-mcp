@@ -111,7 +111,7 @@ This tool is optimized for faster turnaround and lower cost using flash models.
    - Select model based on tool: `gemini-3-flash-preview` (default), fallback `gemini-2.5-flash` on quota/capacity errors, then auto-select.
 3. **Execute Gemini CLI**
    - Run in headless mode with `--output-format json` and `--approval-mode default`.
-   - Pass prompt as positional argument (no `-p`).
+   - Pass prompt via `-p/--prompt` for non-interactive execution.
    - Enforce `--admin-policy <path>` by default (toggleable for advanced users via env).
 4. **Parse and sanitize output**
    - Extract `response` from Gemini's JSON output.
@@ -477,7 +477,7 @@ Also respect:
   - `npm install -g @google/gemini-cli`
 
 ### 7.2 Headless Invocation
-- Use headless mode with positional prompt argument.
+- Use headless mode with `-p/--prompt`.
 - Use `--output-format json` for structured parsing.
 - Use `--approval-mode default` (no `-y`, no `--yolo`).
 - Enforce `--admin-policy <path>` by default.
@@ -699,8 +699,8 @@ npx gemini-researcher init
    - If none found, display auth setup options (Login with Google recommended, API key alternative, Vertex AI for enterprise).
    - Show links to Gemini CLI authentication docs.
 3. **Test Gemini CLI**
-   - Run a minimal test invocation with positional prompt and current safety contract:
-     `gemini --output-format json --approval-mode default --admin-policy <path> "test"`
+   - Run a minimal test invocation with `-p/--prompt` and current safety contract:
+     `gemini --output-format json --approval-mode default --admin-policy <path> -p "test"`
    - If successful, confirm setup is working.
 4. **Display next steps**
    - Show how to configure MCP client (Claude Desktop, VS Code).
@@ -856,7 +856,7 @@ If a user runs the server directly (`npx gemini-researcher`) without running `in
 - ✅ Quota fallback logic (flash/pro models)
 - ✅ Response chunking for large outputs (`fetch_chunk`, cache TTL)
 - ✅ Auth confidence states and degraded diagnostics (`configured|unauthenticated|unknown`)
-- ✅ Command logging prompt redaction for positional prompt contract
+- ✅ Command logging prompt redaction for prompt argument contract (`-p`)
 
 ### Post-v1 Enhancements
 - ⏭️ Custom allowlist configuration (beyond project root)

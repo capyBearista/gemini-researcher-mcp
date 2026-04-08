@@ -211,8 +211,8 @@ toolRegistry.push(myTool);
 When changing CLI integration, setup, diagnostics, or logging, preserve these invariants:
 
 1. **CLI contract**
-   - `gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] "<positional prompt>"`
-   - No server-generated `-p`, `-y`, or `--yolo`.
+   - `gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] -p "<prompt>"`
+   - No server-generated `-y` or `--yolo`.
 
 2. **Auth classification**
    - `configured`: auth confirmed.

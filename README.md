@@ -53,10 +53,10 @@ Gemini Researcher accepts research-style queries over the MCP protocol and spawn
 Gemini Researcher enforces this invocation contract for analysis requests:
 
 ```bash
-gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] "<positional prompt>"
+gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] -p "<prompt>"
 ```
 
-- The server uses a positional prompt argument (no `-p` in server-generated argv).
+- The server uses `-p/--prompt` for explicit non-interactive headless execution.
 - The server does not use `-y`/`--yolo` in server-generated argv.
 - Read-only behavior is enforced via bundled admin policy by default.
 - Admin-policy strict enforcement can be relaxed with `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0` (or `false|no|off`).
