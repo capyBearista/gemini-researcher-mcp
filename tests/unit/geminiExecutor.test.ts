@@ -57,9 +57,10 @@ describe("geminiExecutor CLI contract", () => {
 
     assert.deepStrictEqual(calls[0].args.slice(0, expected.length), expected);
 
-    const promptArg = calls[0].args[calls[0].args.length - 1];
+    const promptFlagIndex = calls[0].args.indexOf("-p");
+    assert.ok(promptFlagIndex > -1);
+    const promptArg = calls[0].args[promptFlagIndex + 1];
     assert.ok(promptArg.includes(getExpectedPromptSuffix("Analyze auth flow")));
-    assert.ok(!calls[0].args.includes("-p"));
     assert.ok(!calls[0].args.includes("-y"));
     assert.ok(!calls[0].args.includes("--yolo"));
   });
@@ -214,7 +215,9 @@ describe("checkGeminiAuth behavior", () => {
       "--admin-policy",
       getReadOnlyPolicyPath(),
     ]);
-    assert.strictEqual(calls[0].args[calls[0].args.length - 1], "test");
+    const promptFlagIndex = calls[0].args.indexOf("-p");
+    assert.ok(promptFlagIndex > -1);
+    assert.strictEqual(calls[0].args[promptFlagIndex + 1], "Respond with exactly OK. Do not call any tools.");
     assert.deepStrictEqual(auth, { configured: true, status: "configured", method: "google_login" });
   });
 
@@ -230,6 +233,7 @@ describe("checkGeminiAuth behavior", () => {
     await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
 
     assert.strictEqual(calls.length, 1);
+    assert.ok(calls[0].args.includes("-p"));
     assert.ok(!calls[0].args.includes("--admin-policy"));
   });
 

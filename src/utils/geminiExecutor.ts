@@ -51,6 +51,9 @@ interface ModelTierConfig {
 
 const READ_ONLY_POLICY_FILE = "read-only-enforcement.toml";
 const ADMIN_POLICY_ENFORCEMENT_ENV = "GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY";
+const ADMIN_POLICY_HELP_TIMEOUT_MS = 5000;
+const AUTH_PROBE_TIMEOUT_MS = 120000;
+const AUTH_PROBE_PROMPT = "Respond with exactly OK. Do not call any tools.";
 
 export type AuthStatus = "configured" | "unauthenticated" | "unknown";
 
@@ -87,7 +90,9 @@ export function isAdminPolicyEnforced(): boolean {
 export async function supportsAdminPolicyFlag(deps?: GeminiExecutorDeps): Promise<boolean> {
   const runCommand = deps?.executeCommandFn ?? executeCommand;
   try {
-    const helpText = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP]);
+    const helpText = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP], undefined, {
+      timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
+    });
     return helpText.includes(CLI.FLAGS.ADMIN_POLICY);
   } catch {
     return false;
@@ -155,8 +160,8 @@ function buildGeminiArgs(prompt: string, model: string | null): string[] {
     args.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
   }
 
-  // Positional prompt for v0.36+ compatibility
-  args.push(prompt);
+  // Explicit prompt flag required for non-interactive mode on current CLI line.
+  args.push(CLI.FLAGS.PROMPT, prompt);
 
   return args;
 }
@@ -401,10 +406,12 @@ export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
     probeArgs.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
   }
 
-  probeArgs.push("test");
-
   try {
-    await runCommand(CLI.COMMANDS.GEMINI, probeArgs);
+    probeArgs.push(CLI.FLAGS.PROMPT, AUTH_PROBE_PROMPT);
+
+    await runCommand(CLI.COMMANDS.GEMINI, probeArgs, undefined, {
+      timeoutMs: AUTH_PROBE_TIMEOUT_MS,
+    });
     return { configured: true, status: "configured", method: "google_login" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

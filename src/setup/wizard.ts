@@ -178,16 +178,17 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
   try {
     // Use longer timeout for Gemini CLI (takes time to boot and process)
     // Use an unambiguous prompt that won't trigger tool search or file analysis
-    const args = [
+    const args: string[] = [
       CLI.FLAGS.OUTPUT_FORMAT,
       CLI.OUTPUT_FORMATS.JSON,
       CLI.FLAGS.APPROVAL_MODE,
       CLI.APPROVAL_MODES.DEFAULT,
+      CLI.FLAGS.PROMPT,
       "What is 2+2? Answer with just the number.",
     ];
 
     if (isAdminPolicyEnforced()) {
-      args.splice(args.length - 1, 0, CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+      args.splice(args.length - 2, 0, CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
     }
 
     const output = await runCommand(CLI.COMMANDS.GEMINI, args, 120000); // 2 minutes timeout

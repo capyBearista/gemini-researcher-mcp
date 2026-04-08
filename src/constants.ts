@@ -152,6 +152,7 @@ export const CLI = {
   // Command flags
   FLAGS: {
     MODEL: "-m",
+    PROMPT: "-p",
     APPROVAL_MODE: "--approval-mode",
     ADMIN_POLICY: "--admin-policy",
     OUTPUT_FORMAT: "--output-format",
