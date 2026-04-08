@@ -208,6 +208,8 @@ toolRegistry.push(myTool);
 
 ### Concern 2 invariants (must preserve)
 
+Canonical runtime invariants live in `docs/runtime-contract.md`. This section is a contributor summary.
+
 When changing CLI integration, setup, diagnostics, or logging, preserve these invariants:
 
 1. **CLI contract**
@@ -231,6 +233,14 @@ When changing CLI integration, setup, diagnostics, or logging, preserve these in
 4. **Test expectations**
    - Behavior-level unit tests in `tests/unit/geminiExecutor.test.ts` assert exact argv and fallback sequencing.
    - Keep these tests updated if contract changes.
+
+### Docs drift prevention checklist (required for runtime-impacting changes)
+
+When a PR changes runtime behavior in executor/safety/auth/health/setup/logging/chunking/tool contracts:
+
+1. Update `docs/runtime-contract.md` in the same PR.
+2. Reconcile user-facing summaries in `README.md`.
+3. Reconcile product-level statements in `docs/project-overview-PRD.md`.
 
 ## Architecture Overview
 

@@ -50,6 +50,8 @@ Gemini Researcher accepts research-style queries over the MCP protocol and spawn
 
 ### Runtime safety contract
 
+Canonical runtime semantics are maintained in `docs/runtime-contract.md`. This section is a quick summary for end users.
+
 Gemini Researcher enforces this invocation contract for analysis requests:
 
 ```bash
