@@ -54,6 +54,12 @@ const ADMIN_POLICY_ENFORCEMENT_ENV = "GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY";
 
 export type AuthStatus = "configured" | "unauthenticated" | "unknown";
 
+type ExecuteCommandFn = typeof executeCommand;
+
+interface GeminiExecutorDeps {
+  executeCommandFn?: ExecuteCommandFn;
+}
+
 function getPoliciesDirectory(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   return path.resolve(moduleDir, "..", "..", "policies");
@@ -78,9 +84,10 @@ export function isAdminPolicyEnforced(): boolean {
   return !(normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off");
 }
 
-export async function supportsAdminPolicyFlag(): Promise<boolean> {
+export async function supportsAdminPolicyFlag(deps?: GeminiExecutorDeps): Promise<boolean> {
+  const runCommand = deps?.executeCommandFn ?? executeCommand;
   try {
-    const helpText = await executeCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP]);
+    const helpText = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP]);
     return helpText.includes(CLI.FLAGS.ADMIN_POLICY);
   } catch {
     return false;
@@ -260,9 +267,11 @@ function extractFilesFromResponse(response: unknown): string[] {
 export async function executeGeminiCLI(
   prompt: string,
   toolName: ToolName,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  deps?: GeminiExecutorDeps
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
+  const runCommand = deps?.executeCommandFn ?? executeCommand;
 
   // Prepend system prompt
   const finalPrompt = `${SYSTEM_PROMPT}\n\n---\n\nUSER REQUEST:\n${prompt}`;
@@ -290,7 +299,7 @@ export async function executeGeminiCLI(
       }
 
       const args = buildGeminiArgs(finalPrompt, model);
-      const output = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress);
+      const output = await runCommand(CLI.COMMANDS.GEMINI, args, onProgress);
 
       // Parse the output
       const parsed = parseGeminiOutput(output);
@@ -359,12 +368,13 @@ export async function getGeminiVersion(): Promise<string | null> {
  *
  * @returns Object with auth status
  */
-export async function checkGeminiAuth(): Promise<{
+export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
   configured: boolean;
   status: AuthStatus;
   method?: "api_key" | "google_login" | "vertex_ai";
   reason?: string;
 }> {
+  const runCommand = deps?.executeCommandFn ?? executeCommand;
   // Check for API key
   if (process.env.GEMINI_API_KEY) {
     return { configured: true, status: "configured", method: "api_key" };
@@ -394,7 +404,7 @@ export async function checkGeminiAuth(): Promise<{
   probeArgs.push("test");
 
   try {
-    await executeCommand(CLI.COMMANDS.GEMINI, probeArgs);
+    await runCommand(CLI.COMMANDS.GEMINI, probeArgs);
     return { configured: true, status: "configured", method: "google_login" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
