@@ -9,6 +9,11 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { WIZARD_MESSAGES, CLI } from "../constants.js";
+import {
+  getReadOnlyPolicyPath,
+  hasReadOnlyPolicyFile,
+  supportsAdminPolicyFlag,
+} from "../utils/geminiExecutor.js";
 
 // ============================================================================
 // Types
@@ -165,10 +170,13 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
     // Use longer timeout for Gemini CLI (takes time to boot and process)
     // Use an unambiguous prompt that won't trigger tool search or file analysis
     const output = await runCommand(CLI.COMMANDS.GEMINI, [
-      CLI.FLAGS.PROMPT,
-      "What is 2+2? Answer with just the number.",
       CLI.FLAGS.OUTPUT_FORMAT,
       CLI.OUTPUT_FORMATS.JSON,
+      CLI.FLAGS.APPROVAL_MODE,
+      CLI.APPROVAL_MODES.DEFAULT,
+      CLI.FLAGS.ADMIN_POLICY,
+      getReadOnlyPolicyPath(),
+      "What is 2+2? Answer with just the number.",
     ], 120000); // 2 minutes timeout
 
     // Try to parse JSON output to verify it's working correctly
@@ -281,6 +289,23 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
     return {
       valid: false,
       error: WIZARD_MESSAGES.STARTUP_GEMINI_NOT_FOUND,
+    };
+  }
+
+  // Verify read-only admin policy file is available
+  if (!hasReadOnlyPolicyFile()) {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_MISSING,
+    };
+  }
+
+  // Verify Gemini CLI supports --admin-policy (v0.36+)
+  const hasAdminPolicySupport = await supportsAdminPolicyFlag();
+  if (!hasAdminPolicySupport) {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_UNSUPPORTED,
     };
   }
 

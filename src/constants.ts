@@ -47,6 +47,10 @@ export const ERROR_MESSAGES = {
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@src/auth.ts explain what this does') or ask general questions",
   GEMINI_CLI_NOT_FOUND: "Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli",
   AUTH_MISSING: "Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google', or set GEMINI_API_KEY environment variable.",
+  ADMIN_POLICY_MISSING:
+    "Gemini CLI read-only admin policy not found. Reinstall package or verify policies/read-only-enforcement.toml exists.",
+  ADMIN_POLICY_UNSUPPORTED:
+    "Gemini CLI version does not support --admin-policy. Upgrade to Gemini CLI v0.36.0 or newer.",
   PATH_NOT_ALLOWED: "Path is outside project root",
   CACHE_EXPIRED: "Cache key not found or expired. Re-run original query to regenerate response.",
   INVALID_CHUNK_INDEX: "Requested chunk index out of range",
@@ -146,11 +150,15 @@ export const CLI = {
   // Command flags
   FLAGS: {
     MODEL: "-m",
-    PROMPT: "-p",
-    YES: "-y", // Auto-approve file reads
+    APPROVAL_MODE: "--approval-mode",
+    ADMIN_POLICY: "--admin-policy",
     OUTPUT_FORMAT: "--output-format",
     VERSION: "--version",
     HELP: "--help",
+  },
+  // Approval modes
+  APPROVAL_MODES: {
+    DEFAULT: "default",
   },
   // Output formats
   OUTPUT_FORMATS: {
@@ -204,7 +212,7 @@ WHEN TO USE THIS TOOL:
 - Prefer using tools over asking the agent to read files directly
 
 CRITICAL CONSTRAINTS:
-- Read-only analysis ONLY (no write/edit tools available without --yolo flag)
+- Read-only analysis ONLY (write/edit tools are blocked by enforced admin policy)
 - Do NOT suggest code changes, patches, or file modifications
 - Do NOT attempt to use run_shell_command or write_file (not available)
 
@@ -301,4 +309,12 @@ Please fix the issues above and run 'npx gemini-researcher init' again.
    - Get API key: https://aistudio.google.com/app/apikey
    - Set in terminal: export GEMINI_API_KEY="your-key-here"
 → Run 'npx gemini-researcher init' for guided setup`,
+  STARTUP_ADMIN_POLICY_MISSING: `❌ Gemini Researcher read-only policy missing
+→ Expected file: policies/read-only-enforcement.toml
+→ Reinstall package and retry
+→ Run 'npx gemini-researcher init' for guided setup`,
+  STARTUP_ADMIN_POLICY_UNSUPPORTED: `❌ Gemini CLI does not support --admin-policy
+→ Upgrade Gemini CLI to v0.36.0 or newer
+→ Current command: gemini --help
+→ Run 'npx gemini-researcher init' after upgrade`,
 } as const;

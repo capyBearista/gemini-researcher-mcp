@@ -46,6 +46,7 @@
   },
   "files": [
     "dist/",
+    "policies/",
     "README.md",
     "LICENSE.md",
     "CHANGELOG.md"

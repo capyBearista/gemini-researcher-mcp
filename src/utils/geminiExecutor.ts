@@ -9,6 +9,9 @@ import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES, MODEL
 import { Logger } from "./logger.js";
 import { executeCommand, commandExists, getCommandVersion } from "./commandExecutor.js";
 import type { ProgressCallback } from "../types.js";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
 
 // ============================================================================
 // Types
@@ -44,6 +47,30 @@ interface ModelTierConfig {
   tier1: string;
   tier2: string;
   tier3: null;
+}
+
+const READ_ONLY_POLICY_FILE = "read-only-enforcement.toml";
+
+function getPoliciesDirectory(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(moduleDir, "..", "..", "policies");
+}
+
+export function getReadOnlyPolicyPath(): string {
+  return path.join(getPoliciesDirectory(), READ_ONLY_POLICY_FILE);
+}
+
+export function hasReadOnlyPolicyFile(): boolean {
+  return fs.existsSync(getReadOnlyPolicyPath());
+}
+
+export async function supportsAdminPolicyFlag(): Promise<boolean> {
+  try {
+    const helpText = await executeCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP]);
+    return helpText.includes(CLI.FLAGS.ADMIN_POLICY);
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================================
@@ -99,14 +126,13 @@ function buildGeminiArgs(prompt: string, model: string | null): string[] {
     args.push(CLI.FLAGS.MODEL, model);
   }
 
-  // Required flags for headless mode
-  args.push(CLI.FLAGS.YES); // Auto-approve file reads
+  // Required flags for headless mode and fail-closed read-only contract
   args.push(CLI.FLAGS.OUTPUT_FORMAT, CLI.OUTPUT_FORMATS.JSON);
+  args.push(CLI.FLAGS.APPROVAL_MODE, CLI.APPROVAL_MODES.DEFAULT);
+  args.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
 
-  // Add prompt
-  args.push(CLI.FLAGS.PROMPT, prompt);
-
-  // NEVER add --yolo flag (read-only enforcement)
+  // Positional prompt for v0.36+ compatibility
+  args.push(prompt);
 
   return args;
 }
@@ -337,10 +363,13 @@ export async function checkGeminiAuth(): Promise<{
       // when preview models have poor availability.
       CLI.FLAGS.MODEL,
       MODELS.FLASH_FALLBACK,
-      CLI.FLAGS.PROMPT,
-      "test",
       CLI.FLAGS.OUTPUT_FORMAT,
       CLI.OUTPUT_FORMATS.JSON,
+      CLI.FLAGS.APPROVAL_MODE,
+      CLI.APPROVAL_MODES.DEFAULT,
+      CLI.FLAGS.ADMIN_POLICY,
+      getReadOnlyPolicyPath(),
+      "test",
     ]);
     return { configured: true, method: "google_login" };
   } catch (error) {

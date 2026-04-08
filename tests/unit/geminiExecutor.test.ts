@@ -33,17 +33,21 @@ describe("geminiExecutor", () => {
       const expectedArgs = [
         "-m",
         model,
-        "-y",
         "--output-format",
         "json",
-        "-p",
+        "--approval-mode",
+        "default",
+        "--admin-policy",
+        "/tmp/read-only-enforcement.toml",
         prompt,
       ];
 
       // Verify the structure
       assert.strictEqual(expectedArgs[0], "-m");
       assert.strictEqual(expectedArgs[1], model);
-      assert.ok(expectedArgs.includes("-y"), "Should include -y flag for auto-approve");
+      assert.ok(expectedArgs.includes("--approval-mode"), "Should include approval mode flag");
+      assert.ok(expectedArgs.includes("default"), "Should enforce default approval mode");
+      assert.ok(expectedArgs.includes("--admin-policy"), "Should include admin policy flag");
       assert.ok(expectedArgs.includes("json"), "Should include json output format");
     });
 
@@ -53,10 +57,12 @@ describe("geminiExecutor", () => {
 
       // Expected args pattern for auto-select (no -m flag)
       const expectedArgsWithoutModel = [
-        "-y",
         "--output-format",
         "json",
-        "-p",
+        "--approval-mode",
+        "default",
+        "--admin-policy",
+        "/tmp/read-only-enforcement.toml",
         prompt,
       ];
 
@@ -64,15 +70,27 @@ describe("geminiExecutor", () => {
       assert.notStrictEqual(expectedArgsWithoutModel[0], "-m");
     });
 
-    it("should never include --yolo flag (read-only enforcement)", () => {
+    it("should never include legacy prompt or yolo flags", () => {
       const prompt = "Analyze this code";
       const model = "gemini-3-flash-preview";
 
-      const expectedArgs = ["-m", model, "-y", "--output-format", "json", "-p", prompt];
+      const expectedArgs = [
+        "-m",
+        model,
+        "--output-format",
+        "json",
+        "--approval-mode",
+        "default",
+        "--admin-policy",
+        "/tmp/read-only-enforcement.toml",
+        prompt,
+      ];
 
       // Should never include --yolo
       assert.ok(!expectedArgs.includes("--yolo"), "Should not include --yolo flag");
       assert.ok(!expectedArgs.includes("-yolo"), "Should not include -yolo flag");
+      assert.ok(!expectedArgs.includes("-y"), "Should not include -y flag");
+      assert.ok(!expectedArgs.includes("-p"), "Should not include -p flag");
     });
   });
 
@@ -235,7 +253,7 @@ CRITICAL CONSTRAINTS:
     it("should include read-only constraints in system prompt", () => {
       const systemPrompt = `
 CRITICAL CONSTRAINTS:
-- Read-only analysis ONLY (no write/edit tools available without --yolo flag)
+- Read-only analysis ONLY (write/edit tools are blocked by enforced admin policy)
 - Do NOT suggest code changes, patches, or file modifications
 `;
 

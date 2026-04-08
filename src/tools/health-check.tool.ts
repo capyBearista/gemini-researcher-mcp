@@ -13,6 +13,8 @@ import {
   isGeminiCLIInstalled,
   getGeminiVersion,
   checkGeminiAuth,
+  hasReadOnlyPolicyFile,
+  supportsAdminPolicyFlag,
   getProjectRoot,
   Logger,
 } from "../utils/index.js";
@@ -78,6 +80,8 @@ export const healthCheckTool: UnifiedTool = {
       // Check authentication
       let authConfigured = false;
       let authMethod: string | undefined;
+      const policyFilePresent = hasReadOnlyPolicyFile();
+      const adminPolicySupported = geminiOnPath ? await supportsAdminPolicyFlag() : false;
       if (geminiOnPath) {
         const auth = await checkGeminiAuth();
         authConfigured = auth.configured;
@@ -92,6 +96,12 @@ export const healthCheckTool: UnifiedTool = {
       if (geminiOnPath && !authConfigured) {
         warnings.push("Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google'.");
       }
+      if (!policyFilePresent) {
+        warnings.push("Read-only admin policy file missing. Expected: policies/read-only-enforcement.toml");
+      }
+      if (geminiOnPath && !adminPolicySupported) {
+        warnings.push("Gemini CLI does not support --admin-policy. Upgrade to v0.36.0 or newer.");
+      }
 
       // Build diagnostics with proper typing
       const diagnostics: Diagnostics = {
@@ -99,13 +109,16 @@ export const healthCheckTool: UnifiedTool = {
         geminiOnPath,
         geminiVersion,
         authConfigured,
-        readOnlyModeEnforced: true, // We never use --yolo flag
+        readOnlyModeEnforced: policyFilePresent && adminPolicySupported,
         ...(authMethod && { authMethod }),
         ...(warnings.length > 0 && { warnings }),
       };
 
       // Determine overall status
-      const status: HealthCheckResponse["status"] = geminiOnPath && authConfigured ? "ok" : "degraded";
+      const status: HealthCheckResponse["status"] =
+        geminiOnPath && authConfigured && policyFilePresent && adminPolicySupported
+          ? "ok"
+          : "degraded";
 
       const response: HealthCheckResponse = {
         tool: "health_check",

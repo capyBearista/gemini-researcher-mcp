@@ -1,0 +1,17 @@
+# Enforced by Gemini Researcher via --admin-policy
+# Phase 1 contract: deny known mutating tools in all modes.
+
+[[rule]]
+toolName = "write_file"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "replace"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "deny"
+priority = 999
