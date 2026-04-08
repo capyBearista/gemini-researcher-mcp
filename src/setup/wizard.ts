@@ -5,10 +5,16 @@
  */
 
 import { spawn } from "child_process";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
-import { WIZARD_MESSAGES, CLI } from "../constants.js";
+import { WIZARD_MESSAGES, CLI, ERROR_MESSAGES } from "../constants.js";
+import {
+  checkGeminiAuth,
+  getReadOnlyPolicyPath,
+  hasReadOnlyPolicyFile,
+  isAuthRelatedErrorMessage,
+  isAdminPolicyEnforced,
+  supportsAdminPolicyFlag,
+  supportsRequiredOutputFormats,
+} from "../utils/geminiExecutor.js";
 
 // ============================================================================
 // Types
@@ -19,6 +25,7 @@ export interface ValidationResult {
   message?: string;
   details?: Record<string, unknown>;
   isAuthError?: boolean;
+  isAuthUnknown?: boolean;
 }
 
 export interface GeminiInstallCheck {
@@ -139,21 +146,13 @@ export async function checkGeminiInstallation(): Promise<GeminiInstallCheck> {
  * Fast check if authentication is likely configured
  */
 export function isAuthConfigured(): boolean {
-  // 1. Check environment variables (Gemini API Key or Vertex AI)
-  if (
+  // Deprecated heuristic kept for backward compatibility with tests/imports.
+  // Runtime startup validation now uses checkGeminiAuth() for strict fail-closed semantics.
+  return Boolean(
     process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-    process.env.GOOGLE_CLOUD_PROJECT
-  ) {
-    return true;
-  }
-
-  // 2. Check for cached credentials in home directory
-  // Based on gemini CLI docs, it uses ~/.gemini/settings.json or credentials
-  const homeDir = os.homedir();
-  const geminiDir = path.join(homeDir, ".gemini");
-
-  return fs.existsSync(geminiDir);
+      process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+      process.env.GOOGLE_CLOUD_PROJECT
+  );
 }
 
 /**
@@ -161,15 +160,40 @@ export function isAuthConfigured(): boolean {
  * This also validates authentication - if auth is missing, command will fail
  */
 export async function testGeminiInvocation(): Promise<ValidationResult> {
+  const auth = await checkGeminiAuth();
+  if (!auth.configured && auth.status === "unauthenticated") {
+    return {
+      success: false,
+      message: ERROR_MESSAGES.AUTH_MISSING,
+      isAuthError: true,
+    };
+  }
+
+  if (!auth.configured && auth.status === "unknown") {
+    return {
+      success: false,
+      message: ERROR_MESSAGES.AUTH_UNKNOWN,
+      isAuthUnknown: true,
+    };
+  }
+
   try {
     // Use longer timeout for Gemini CLI (takes time to boot and process)
     // Use an unambiguous prompt that won't trigger tool search or file analysis
-    const output = await runCommand(CLI.COMMANDS.GEMINI, [
-      CLI.FLAGS.PROMPT,
-      "What is 2+2? Answer with just the number.",
+    const args: string[] = [
       CLI.FLAGS.OUTPUT_FORMAT,
       CLI.OUTPUT_FORMATS.JSON,
-    ], 120000); // 2 minutes timeout
+      CLI.FLAGS.APPROVAL_MODE,
+      CLI.APPROVAL_MODES.DEFAULT,
+      CLI.FLAGS.PROMPT,
+      "What is 2+2? Answer with just the number.",
+    ];
+
+    if (isAdminPolicyEnforced()) {
+      args.splice(args.length - 2, 0, CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+    }
+
+    const output = await runCommand(CLI.COMMANDS.GEMINI, args, 120000); // 2 minutes timeout
 
     // Try to parse JSON output to verify it's working correctly
     try {
@@ -186,17 +210,14 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     // Check if error is likely auth-related
-    const isAuthError =
-      errorMessage.includes('auth') ||
-      errorMessage.includes('login') ||
-      errorMessage.includes('credential') ||
-      errorMessage.includes('unauthenticated') ||
-      errorMessage.includes('timed out'); // Timeout often means waiting for auth prompt
+    const isAuthError = isAuthRelatedErrorMessage(errorMessage);
+    const isAuthUnknown = !isAuthError;
 
     return {
       success: false,
       message: errorMessage,
       isAuthError,
+      isAuthUnknown,
     };
   }
 }
@@ -249,6 +270,11 @@ export async function runSetupWizard(): Promise<boolean> {
         console.log("");
         console.log(WIZARD_MESSAGES.AUTH_NOT_FOUND);
       }
+
+      if (testResult.isAuthUnknown) {
+        console.log("");
+        console.log(ERROR_MESSAGES.AUTH_UNKNOWN);
+      }
     }
   }
 
@@ -274,6 +300,8 @@ export async function runSetupWizard(): Promise<boolean> {
  * Returns true if environment is valid, false otherwise
  */
 export async function validateEnvironment(): Promise<{ valid: boolean; error?: string }> {
+  const enforceAdminPolicy = isAdminPolicyEnforced();
+
   // Check Gemini CLI installation
   const installCheck = await checkGeminiInstallation();
 
@@ -284,11 +312,49 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
     };
   }
 
-  // Check authentication
-  if (!isAuthConfigured()) {
+  if (!enforceAdminPolicy) {
+    console.warn(WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_RELAXED);
+  }
+
+  // Verify read-only admin policy file is available
+  if (enforceAdminPolicy && !hasReadOnlyPolicyFile()) {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_MISSING,
+    };
+  }
+
+  // Verify Gemini CLI supports --admin-policy (v0.36+)
+  const hasAdminPolicySupport = enforceAdminPolicy ? await supportsAdminPolicyFlag() : true;
+  if (enforceAdminPolicy && !hasAdminPolicySupport) {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_UNSUPPORTED,
+    };
+  }
+
+  // Verify Gemini CLI supports required output formats (json + stream-json)
+  const hasRequiredOutputFormats = await supportsRequiredOutputFormats();
+  if (!hasRequiredOutputFormats) {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_OUTPUT_FORMAT_UNSUPPORTED,
+    };
+  }
+
+  // Check authentication (strict, fail-closed for unknown)
+  const auth = await checkGeminiAuth();
+  if (!auth.configured && auth.status === "unauthenticated") {
     return {
       valid: false,
       error: WIZARD_MESSAGES.STARTUP_AUTH_MISSING,
+    };
+  }
+
+  if (!auth.configured && auth.status === "unknown") {
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_AUTH_UNKNOWN,
     };
   }
 

@@ -182,8 +182,11 @@ toolRegistry.push(myTool);
 
 **Read-only enforcement**
 - Never modify files on disk
-- All Gemini CLI invocations must be read-only (no `--yolo` flag)
-- Gemini CLI is read-only by default in headless mode
+- Server-generated Gemini argv must never include `-y` or `--yolo`
+- Runtime contract must include `--approval-mode default`
+- Runtime contract should include `--admin-policy <path>` when strict enforcement is enabled
+- Strict enforcement is enabled by default and can be relaxed only via `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0|false|no|off`
+- Policy is deny-list based; update policy entries when mutating tool names evolve upstream
 
 **Server-managed model selection**
 - Agents cannot choose models
@@ -200,7 +203,34 @@ toolRegistry.push(myTool);
 - Use structured logging (see `src/utils/logger.ts`)
 - Levels: `error`, `warn`, `info`, `debug`
 - **NEVER log**: `GEMINI_API_KEY` or any authentication credentials
-- **DO log**: tool invocations, Gemini CLI args (not output), errors with sanitized stderr
+- **DO log**: tool invocations, redacted Gemini CLI args (not output), errors with sanitized stderr
+- Prompt payloads in command args must remain fully redacted (`[REDACTED_PROMPT]`)
+
+### Concern 2 invariants (must preserve)
+
+When changing CLI integration, setup, diagnostics, or logging, preserve these invariants:
+
+1. **CLI contract**
+   - `gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] -p "<prompt>"`
+   - No server-generated `-y` or `--yolo`.
+
+2. **Auth classification**
+   - `configured`: auth confirmed.
+   - `unauthenticated`: explicit auth failure.
+   - `unknown`: ambiguous probe failure; never treat as configured.
+
+   | Auth Status | Meaning | Required handling |
+   |---|---|---|
+   | `configured` | Authentication is confirmed | Normal operation |
+   | `unauthenticated` | Authentication is missing/invalid | Fail setup/return degraded diagnostics |
+   | `unknown` | Probe could not confirm auth | Fail-closed (do not treat as configured) |
+
+3. **Health semantics**
+   - Return `degraded` for auth/policy uncertainty rather than pretending healthy.
+
+4. **Test expectations**
+   - Behavior-level unit tests in `tests/unit/geminiExecutor.test.ts` assert exact argv and fallback sequencing.
+   - Keep these tests updated if contract changes.
 
 ## Architecture Overview
 
@@ -312,6 +342,11 @@ Your PR will be reviewed for:
 - Documentation updates (README, inline comments)
 - Backwards compatibility (or clear migration path)
 - Performance implications
+
+For CLI-contract changes, reviewers should also verify:
+- exact argv expectations still pass in unit tests,
+- strict safety flags remain enforced by default,
+- auth/health docs and behavior remain aligned.
 
 ## Release Process
 

@@ -1,0 +1,28 @@
+# Enforced by Gemini Researcher via --admin-policy
+# Deny mutating tools using canonical names from docs/gemini-cli/reference/tools.md.
+
+# Execution
+
+[[rule]]
+toolName = "run_shell_command"
+decision = "deny"
+priority = 999
+
+# File System
+
+[[rule]]
+toolName = "replace"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "write_file"
+decision = "deny"
+priority = 999
+
+# Interaction
+
+[[rule]]
+toolName = "ask_user"
+decision = "deny"
+priority = 999

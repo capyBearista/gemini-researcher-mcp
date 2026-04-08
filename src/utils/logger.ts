@@ -67,6 +67,57 @@ function safeStringify(value: unknown): string {
   }
 }
 
+const SAFE_VALUE_FLAGS = new Set([
+  "-m",
+  "--model",
+  "--output-format",
+  "--approval-mode",
+  "--admin-policy",
+]);
+
+const REDACTED_PROMPT = "[REDACTED_PROMPT]";
+const REDACTED_ARG = "[REDACTED_ARG]";
+
+export function redactCommandArgs(args: string[]): string[] {
+  const redacted: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const current = args[i];
+    const next = i + 1 < args.length ? args[i + 1] : undefined;
+
+    if (current === "-p" || current === "--prompt") {
+      redacted.push(current);
+      if (next !== undefined) {
+        redacted.push(REDACTED_PROMPT);
+        i++;
+      }
+      continue;
+    }
+
+    if (SAFE_VALUE_FLAGS.has(current)) {
+      redacted.push(current);
+      if (next !== undefined) {
+        redacted.push(next);
+        i++;
+      }
+      continue;
+    }
+
+    if (current.startsWith("-")) {
+      redacted.push(current);
+      if (next !== undefined && !next.startsWith("-")) {
+        redacted.push(REDACTED_ARG);
+        i++;
+      }
+      continue;
+    }
+
+    redacted.push(REDACTED_PROMPT);
+  }
+
+  return redacted;
+}
+
 /**
  * Logger class for structured logging
  */
@@ -141,14 +192,7 @@ export class Logger {
    * Log command execution (command args, not output)
    */
   static commandExecution(command: string, args: string[], startTime: number): void {
-    // Filter out the actual prompt content from args (it's the last argument after -p)
-    const safeArgs = args.map((arg, index) => {
-      // If previous arg was -p or --prompt, truncate this arg
-      if (index > 0 && (args[index - 1] === "-p" || args[index - 1] === "--prompt")) {
-        return arg.length > 100 ? arg.substring(0, 100) + "...[truncated]" : arg;
-      }
-      return arg;
-    });
+    const safeArgs = redactCommandArgs(args);
     this.debug(`[${startTime}] Executing: ${command} ${safeArgs.join(" ")}`);
   }
 

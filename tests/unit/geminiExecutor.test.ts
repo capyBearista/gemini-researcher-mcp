@@ -1,336 +1,332 @@
 /**
- * Unit tests for geminiExecutor utility
- * Tests 3-tier model fallback, system prompt prepending, and error handling
+ * Behavior-level unit tests for geminiExecutor CLI contract.
  */
 
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
+import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
+import {
+  executeGeminiCLI,
+  checkGeminiAuth,
+  isAdminPolicyEnforced,
+  getReadOnlyPolicyPath,
+  isAuthRelatedErrorMessage,
+  supportsRequiredOutputFormats,
+} from "../../src/utils/geminiExecutor.js";
+import { MODELS } from "../../src/constants.js";
 
-// Mock the commandExecutor module before importing geminiExecutor
-const mockExecuteCommand = mock.fn<
-  (command: string, args: string[], onProgress?: (output: string) => void) => Promise<string>
->();
-const mockCommandExists = mock.fn<(command: string) => Promise<boolean>>();
-const mockGetCommandVersion = mock.fn<(command: string) => Promise<string | null>>();
+type ExecuteCommandMock = (
+  command: string,
+  args: string[],
+  onProgress?: (newOutput: string) => void
+) => Promise<string>;
 
-// We need to test the module in isolation, so we'll test the behavior patterns
-// rather than the actual module (which requires complex ESM mocking)
+function getExpectedPromptSuffix(prompt: string): string {
+  return `\n\n---\n\nUSER REQUEST:\n${prompt}`;
+}
 
-describe("geminiExecutor", () => {
+describe("geminiExecutor CLI contract", () => {
   beforeEach(() => {
-    mockExecuteCommand.mock.resetCalls();
-    mockCommandExists.mock.resetCalls();
-    mockGetCommandVersion.mock.resetCalls();
+    delete process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.VERTEX_AI_PROJECT;
   });
 
-  describe("buildGeminiArgs", () => {
-    it("should include model flag when model is specified", () => {
-      // Test the expected argument structure
-      const prompt = "Analyze this code";
-      const model = "gemini-3-flash-preview";
+  it("builds exact tier-1 argv for quick_query with strict admin policy", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok", usage: { totalTokens: 5 }, toolCalls: 0 });
+    };
 
-      // Expected args pattern
-      const expectedArgs = [
-        "-m",
-        model,
-        "-y",
-        "--output-format",
-        "json",
-        "-p",
-        prompt,
-      ];
-
-      // Verify the structure
-      assert.strictEqual(expectedArgs[0], "-m");
-      assert.strictEqual(expectedArgs[1], model);
-      assert.ok(expectedArgs.includes("-y"), "Should include -y flag for auto-approve");
-      assert.ok(expectedArgs.includes("json"), "Should include json output format");
+    await executeGeminiCLI("Analyze auth flow", "quick_query", undefined, {
+      executeCommandFn: mockExecuteCommand,
     });
 
-    it("should not include model flag when model is null (auto-select)", () => {
-      const prompt = "Analyze this code";
-      const model: string | null = null;
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].command, "gemini");
 
-      // Expected args pattern for auto-select (no -m flag)
-      const expectedArgsWithoutModel = [
-        "-y",
-        "--output-format",
-        "json",
-        "-p",
-        prompt,
-      ];
+    const expected = [
+      "-m",
+      MODELS.FLASH_DEFAULT,
+      "--output-format",
+      "json",
+      "--approval-mode",
+      "default",
+      "--admin-policy",
+      getReadOnlyPolicyPath(),
+    ];
 
-      // Should not start with -m
-      assert.notStrictEqual(expectedArgsWithoutModel[0], "-m");
-    });
+    assert.deepStrictEqual(calls[0].args.slice(0, expected.length), expected);
 
-    it("should never include --yolo flag (read-only enforcement)", () => {
-      const prompt = "Analyze this code";
-      const model = "gemini-3-flash-preview";
-
-      const expectedArgs = ["-m", model, "-y", "--output-format", "json", "-p", prompt];
-
-      // Should never include --yolo
-      assert.ok(!expectedArgs.includes("--yolo"), "Should not include --yolo flag");
-      assert.ok(!expectedArgs.includes("-yolo"), "Should not include -yolo flag");
-    });
+    const promptFlagIndex = calls[0].args.indexOf("-p");
+    assert.ok(promptFlagIndex > -1);
+    const promptArg = calls[0].args[promptFlagIndex + 1];
+    assert.ok(promptArg.includes(getExpectedPromptSuffix("Analyze auth flow")));
+    assert.ok(!calls[0].args.includes("-y"));
+    assert.ok(!calls[0].args.includes("--yolo"));
   });
 
-  describe("parseGeminiOutput", () => {
-    it("should parse valid JSON response", () => {
-      const jsonOutput = JSON.stringify({
-        response: "This is the analysis result",
-        usage: { totalTokens: 500 },
-        toolCalls: 3,
-      });
+  it("builds exact tier-1 argv without admin policy when enforcement disabled", async () => {
+    process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY = "0";
 
-      const parsed = JSON.parse(jsonOutput);
-      assert.strictEqual(parsed.response, "This is the analysis result");
-      assert.strictEqual(parsed.usage.totalTokens, 500);
-      assert.strictEqual(parsed.toolCalls, 3);
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok", usage: { totalTokens: 5 }, toolCalls: 0 });
+    };
+
+    await executeGeminiCLI("Analyze cache", "quick_query", undefined, {
+      executeCommandFn: mockExecuteCommand,
     });
 
-    it("should handle plain text output gracefully", () => {
-      const plainTextOutput = "This is plain text without JSON";
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].args.slice(0, 6), [
+      "-m",
+      MODELS.FLASH_DEFAULT,
+      "--output-format",
+      "json",
+      "--approval-mode",
+      "default",
+    ]);
+    assert.ok(!calls[0].args.includes("--admin-policy"));
+  });
 
-      // When JSON.parse fails, the module should return raw output
-      try {
-        JSON.parse(plainTextOutput);
-        assert.fail("Should throw on invalid JSON");
-      } catch {
-        // Expected behavior - plain text should be returned as-is
-        assert.strictEqual(plainTextOutput, "This is plain text without JSON");
+  it("falls back to tier-2 on quota error with exact argv", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    let invocation = 0;
+
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      invocation += 1;
+
+      if (invocation === 1) {
+        throw new Error("Quota exceeded for quota metric");
       }
+
+      return JSON.stringify({ response: "fallback ok", usage: { totalTokens: 10 }, toolCalls: 0 });
+    };
+
+    const result = await executeGeminiCLI("Analyze fallback", "quick_query", undefined, {
+      executeCommandFn: mockExecuteCommand,
     });
 
-    it("should extract files from Files Referenced section", () => {
-      const responseWithFiles = `
-Analysis complete.
-
-## Files Referenced
-- src/auth.ts
-- src/middleware/rate-limit.ts
-- config/settings.json
-`;
-
-      // Extract files using regex pattern
-      const fileMatches = responseWithFiles.match(/## Files Referenced\n([\s\S]*?)(?:\n##|$)/);
-      assert.ok(fileMatches, "Should find Files Referenced section");
-
-      const fileLines = fileMatches![1]
-        .split("\n")
-        .map((line) => line.replace(/^[-*]\s*/, "").trim())
-        .filter((line) => line.length > 0 && !line.startsWith("#"));
-
-      assert.deepStrictEqual(fileLines, [
-        "src/auth.ts",
-        "src/middleware/rate-limit.ts",
-        "config/settings.json",
-      ]);
-    });
+    assert.strictEqual(calls.length, 2);
+    assert.deepStrictEqual(calls[0].args.slice(0, 2), ["-m", MODELS.FLASH_DEFAULT]);
+    assert.deepStrictEqual(calls[1].args.slice(0, 2), ["-m", MODELS.FLASH_FALLBACK]);
+    assert.strictEqual(result.model, MODELS.FLASH_FALLBACK);
   });
 
-  describe("isQuotaError", () => {
-    it("should detect quota exceeded errors", () => {
-      const quotaErrors = [
-        "Quota exceeded for quota metric",
-        "RESOURCE_EXHAUSTED: Rate limit exceeded",
-        "rate limit reached",
-        "429 Too Many Requests",
-        "capacity exceeded",
-      ];
+  it("falls back to tier-3 auto-select (no -m flag) after two quota errors", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    let invocation = 0;
 
-      for (const errorMessage of quotaErrors) {
-        const isQuota =
-          errorMessage.toLowerCase().includes("quota") ||
-          errorMessage.toLowerCase().includes("resource_exhausted") ||
-          errorMessage.toLowerCase().includes("rate limit") ||
-          errorMessage.toLowerCase().includes("capacity") ||
-          errorMessage.toLowerCase().includes("too many requests") ||
-          errorMessage.includes("429");
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      invocation += 1;
 
-        assert.ok(isQuota, `Should detect quota error: ${errorMessage}`);
+      if (invocation <= 2) {
+        throw new Error("RESOURCE_EXHAUSTED: Rate limit exceeded");
       }
+
+      return JSON.stringify({ response: "auto ok", usage: { totalTokens: 7 }, toolCalls: 0 });
+    };
+
+    const result = await executeGeminiCLI("Analyze auto", "quick_query", undefined, {
+      executeCommandFn: mockExecuteCommand,
     });
 
-    it("should not classify non-quota errors as quota errors", () => {
-      const nonQuotaErrors = [
-        "File not found: src/missing.ts",
-        "Authentication failed",
-        "Network timeout",
-        "Invalid JSON response",
-      ];
-
-      for (const errorMessage of nonQuotaErrors) {
-        const isQuota =
-          errorMessage.toLowerCase().includes("quota") ||
-          errorMessage.toLowerCase().includes("resource_exhausted") ||
-          errorMessage.toLowerCase().includes("rate limit") ||
-          errorMessage.toLowerCase().includes("capacity") ||
-          errorMessage.toLowerCase().includes("too many requests") ||
-          errorMessage.includes("429");
-
-        assert.ok(!isQuota, `Should not detect as quota error: ${errorMessage}`);
-      }
-    });
+    assert.strictEqual(calls.length, 3);
+    assert.ok(calls[2].args[0] !== "-m");
+    assert.ok(!calls[2].args.includes("-m"));
+    assert.strictEqual(result.model, "auto");
   });
 
-  describe("3-tier model fallback", () => {
-    it("should define correct model tiers for quick_query", () => {
-      const quickQueryTiers = {
-        tier1: "gemini-3-flash-preview",
-        tier2: "gemini-2.5-flash",
-        tier3: null, // auto-select
-      };
+  it("does not fallback on non-quota errors", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
 
-      assert.strictEqual(quickQueryTiers.tier1, "gemini-3-flash-preview");
-      assert.strictEqual(quickQueryTiers.tier2, "gemini-2.5-flash");
-      assert.strictEqual(quickQueryTiers.tier3, null);
-    });
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      throw new Error("Authentication failed");
+    };
 
-    it("should define correct model tiers for deep_research", () => {
-      const deepResearchTiers = {
-        tier1: "gemini-3-pro-preview",
-        tier2: "gemini-2.5-pro",
-        tier3: null, // auto-select
-      };
+    await assert.rejects(
+      executeGeminiCLI("Analyze error", "quick_query", undefined, {
+        executeCommandFn: mockExecuteCommand,
+      }),
+      /Authentication failed/
+    );
 
-      assert.strictEqual(deepResearchTiers.tier1, "gemini-3-pro-preview");
-      assert.strictEqual(deepResearchTiers.tier2, "gemini-2.5-pro");
-      assert.strictEqual(deepResearchTiers.tier3, null);
-    });
-
-    it("should have 3 tiers for all tools", () => {
-      const toolTiers = ["quick_query", "deep_research", "analyze_directory"];
-
-      for (const tool of toolTiers) {
-        // Each tool should have exactly 3 fallback tiers
-        const tiers = [
-          tool === "deep_research" ? "gemini-3-pro-preview" : "gemini-3-flash-preview",
-          tool === "deep_research" ? "gemini-2.5-pro" : "gemini-2.5-flash",
-          null,
-        ];
-        assert.strictEqual(tiers.length, 3, `${tool} should have 3 tiers`);
-      }
-    });
-  });
-
-  describe("system prompt prepending", () => {
-    it("should prepend system prompt to user prompt", () => {
-      const systemPrompt = `
-You are analyzing a codebase on behalf of an AI coding agent.
-
-CRITICAL CONSTRAINTS:
-- Read-only analysis ONLY
-`;
-      const userPrompt = "Analyze the authentication flow";
-
-      const finalPrompt = `${systemPrompt}\n\n---\n\nUSER REQUEST:\n${userPrompt}`;
-
-      assert.ok(finalPrompt.includes("CRITICAL CONSTRAINTS"), "Should include system prompt");
-      assert.ok(finalPrompt.includes("USER REQUEST:"), "Should include user request marker");
-      assert.ok(finalPrompt.includes(userPrompt), "Should include user prompt");
-    });
-
-    it("should include read-only constraints in system prompt", () => {
-      const systemPrompt = `
-CRITICAL CONSTRAINTS:
-- Read-only analysis ONLY (no write/edit tools available without --yolo flag)
-- Do NOT suggest code changes, patches, or file modifications
-`;
-
-      assert.ok(systemPrompt.includes("Read-only analysis"), "Should enforce read-only");
-      assert.ok(systemPrompt.includes("Do NOT suggest code changes"), "Should prohibit changes");
-    });
-
-    it("should include token efficiency guidelines", () => {
-      const systemPrompt = `
-OPTIMIZATION FOR TOKEN EFFICIENCY:
-- The calling agent has limited context - be concise but thorough
-- Prioritize KEY findings over exhaustive details
-`;
-
-      assert.ok(systemPrompt.includes("TOKEN EFFICIENCY"), "Should include efficiency guidelines");
-      assert.ok(systemPrompt.includes("concise but thorough"), "Should encourage concise output");
-    });
-  });
-
-  describe("error handling", () => {
-    it("should create proper error structure for CLI not found", () => {
-      const error = {
-        code: "GEMINI_CLI_NOT_FOUND",
-        message: "Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli",
-        details: {},
-      };
-
-      assert.strictEqual(error.code, "GEMINI_CLI_NOT_FOUND");
-      assert.ok(error.message.includes("npm install -g @google/gemini-cli"));
-    });
-
-    it("should create proper error structure for auth missing", () => {
-      const error = {
-        code: "AUTH_MISSING",
-        message: "Gemini CLI authentication not configured",
-        details: {},
-      };
-
-      assert.strictEqual(error.code, "AUTH_MISSING");
-    });
-
-    it("should sanitize stderr in error messages", () => {
-      const stderr = "Error: GEMINI_API_KEY=sk-secret123 is invalid";
-
-      // Sanitization should remove or mask API keys
-      const sanitized = stderr.replace(/GEMINI_API_KEY=\S+/g, "GEMINI_API_KEY=***");
-
-      assert.ok(!sanitized.includes("sk-secret123"), "Should not contain API key");
-      assert.ok(sanitized.includes("***"), "Should mask sensitive data");
-    });
+    assert.strictEqual(calls.length, 1);
   });
 });
 
-describe("validation functions", () => {
-  describe("isGeminiCLIInstalled", () => {
-    it("should use 'which' command on Unix", () => {
-      // On Unix, commandExists should use 'which'
-      const platform = process.platform;
-      const checkCommand = platform === "win32" ? "where" : "which";
-
-      assert.ok(
-        checkCommand === "which" || checkCommand === "where",
-        "Should use appropriate command for platform"
-      );
-    });
+describe("checkGeminiAuth behavior", () => {
+  beforeEach(() => {
+    delete process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.VERTEX_AI_PROJECT;
   });
 
-  describe("checkGeminiAuth", () => {
-    it("should detect GEMINI_API_KEY environment variable", () => {
-      const hasApiKey = process.env.GEMINI_API_KEY !== undefined;
+  it("returns configured/api_key when GEMINI_API_KEY is set and does not probe", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
 
-      // Test structure
-      const authResult = {
-        configured: hasApiKey,
-        method: hasApiKey ? "api_key" : undefined,
-      };
+    let called = false;
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      called = true;
+      return "";
+    };
 
-      if (hasApiKey) {
-        assert.strictEqual(authResult.method, "api_key");
-      }
-    });
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+    assert.deepStrictEqual(auth, { configured: true, status: "configured", method: "api_key" });
+    assert.strictEqual(called, false);
+  });
 
-    it("should detect Vertex AI credentials", () => {
-      const hasVertexAI =
-        process.env.GOOGLE_APPLICATION_CREDENTIALS !== undefined ||
-        process.env.VERTEX_AI_PROJECT !== undefined;
+  it("returns configured/vertex_ai when vertex env is set and does not probe", async () => {
+    process.env.VERTEX_AI_PROJECT = "proj";
 
-      const authResult = {
-        configured: hasVertexAI,
-        method: hasVertexAI ? "vertex_ai" : undefined,
-      };
+    let called = false;
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      called = true;
+      return "";
+    };
 
-      if (hasVertexAI) {
-        assert.strictEqual(authResult.method, "vertex_ai");
-      }
-    });
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+    assert.deepStrictEqual(auth, { configured: true, status: "configured", method: "vertex_ai" });
+    assert.strictEqual(called, false);
+  });
+
+  it("returns configured/google_login on successful probe with exact args", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok" });
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].args.slice(0, 8), [
+      "-m",
+      MODELS.FLASH_FALLBACK,
+      "--output-format",
+      "json",
+      "--approval-mode",
+      "default",
+      "--admin-policy",
+      getReadOnlyPolicyPath(),
+    ]);
+    const promptFlagIndex = calls[0].args.indexOf("-p");
+    assert.ok(promptFlagIndex > -1);
+    assert.strictEqual(calls[0].args[promptFlagIndex + 1], "Respond with exactly OK. Do not call any tools.");
+    assert.deepStrictEqual(auth, { configured: true, status: "configured", method: "google_login" });
+  });
+
+  it("omits admin policy in auth probe when enforcement disabled", async () => {
+    process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY = "false";
+
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok" });
+    };
+
+    await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(calls.length, 1);
+    assert.ok(calls[0].args.includes("-p"));
+    assert.ok(!calls[0].args.includes("--admin-policy"));
+  });
+
+  it("classifies auth-like failures as unauthenticated", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error("Unauthenticated: login required");
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(auth.configured, false);
+    assert.strictEqual(auth.status, "unauthenticated");
+    assert.ok(typeof auth.reason === "string");
+  });
+
+  it("classifies permission denied failures as unauthenticated", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error("Permission denied: cannot access keychain");
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(auth.configured, false);
+    assert.strictEqual(auth.status, "unauthenticated");
+  });
+
+  it("classifies ambiguous failures as unknown", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error("Temporary network failure");
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(auth.configured, false);
+    assert.strictEqual(auth.status, "unknown");
+    assert.ok(typeof auth.reason === "string");
+  });
+});
+
+describe("auth error classifier", () => {
+  it("detects auth-like error messages consistently", () => {
+    assert.strictEqual(isAuthRelatedErrorMessage("Unauthenticated: login required"), true);
+    assert.strictEqual(isAuthRelatedErrorMessage("Permission denied while loading credentials"), true);
+    assert.strictEqual(isAuthRelatedErrorMessage("Temporary network failure"), false);
+  });
+});
+
+describe("output format capability checks", () => {
+  it("returns true when help shows both json and stream-json output formats", async () => {
+    const mockHelp = `
+Options:
+  -o, --output-format  The format of the CLI output. [string] [choices: "text", "json", "stream-json"]
+`;
+
+    const mockExecuteCommand: ExecuteCommandMock = async () => mockHelp;
+    const supported = await supportsRequiredOutputFormats({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(supported, true);
+  });
+
+  it("returns false when stream-json is missing from help output choices", async () => {
+    const mockHelp = `
+Options:
+  -o, --output-format  The format of the CLI output. [string] [choices: "text", "json"]
+`;
+
+    const mockExecuteCommand: ExecuteCommandMock = async () => mockHelp;
+    const supported = await supportsRequiredOutputFormats({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(supported, false);
+  });
+});
+
+describe("admin policy enforcement toggle", () => {
+  it("defaults to enforced when env is unset", () => {
+    delete process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY;
+    assert.strictEqual(isAdminPolicyEnforced(), true);
+  });
+
+  it("disables enforcement for recognized falsey values", () => {
+    const values = ["0", "false", "no", "off", "FALSE", " Off "];
+
+    for (const value of values) {
+      process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY = value;
+      assert.strictEqual(isAdminPolicyEnforced(), false);
+    }
+  });
+
+  it("keeps enforcement for other values", () => {
+    process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY = "1";
+    assert.strictEqual(isAdminPolicyEnforced(), true);
+
+    process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY = "true";
+    assert.strictEqual(isAdminPolicyEnforced(), true);
   });
 });

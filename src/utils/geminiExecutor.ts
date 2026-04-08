@@ -9,6 +9,9 @@ import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES, MODEL
 import { Logger } from "./logger.js";
 import { executeCommand, commandExists, getCommandVersion } from "./commandExecutor.js";
 import type { ProgressCallback } from "../types.js";
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
 
 // ============================================================================
 // Types
@@ -44,6 +47,114 @@ interface ModelTierConfig {
   tier1: string;
   tier2: string;
   tier3: null;
+}
+
+const READ_ONLY_POLICY_FILE = "read-only-enforcement.toml";
+const ADMIN_POLICY_ENFORCEMENT_ENV = "GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY";
+const ADMIN_POLICY_HELP_TIMEOUT_MS = 5000;
+const AUTH_PROBE_TIMEOUT_MS = 120000;
+const AUTH_PROBE_PROMPT = "Respond with exactly OK. Do not call any tools.";
+const REQUIRED_OUTPUT_FORMATS = [CLI.OUTPUT_FORMATS.JSON, CLI.OUTPUT_FORMATS.STREAM_JSON] as const;
+const AUTH_ERROR_HINTS = ["auth", "login", "credential", "unauthenticated", "permission denied"] as const;
+
+export type AuthStatus = "configured" | "unauthenticated" | "unknown";
+
+interface GeminiCliCapabilities {
+  hasAdminPolicyFlag: boolean;
+  outputFormatChoices: string[];
+}
+
+type ExecuteCommandFn = typeof executeCommand;
+
+interface GeminiExecutorDeps {
+  executeCommandFn?: ExecuteCommandFn;
+}
+
+function getPoliciesDirectory(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(moduleDir, "..", "..", "policies");
+}
+
+export function getReadOnlyPolicyPath(): string {
+  return path.join(getPoliciesDirectory(), READ_ONLY_POLICY_FILE);
+}
+
+export function hasReadOnlyPolicyFile(): boolean {
+  return fs.existsSync(getReadOnlyPolicyPath());
+}
+
+export function isAdminPolicyEnforced(): boolean {
+  const value = process.env[ADMIN_POLICY_ENFORCEMENT_ENV];
+
+  if (!value) {
+    return true;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return !(normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off");
+}
+
+export function isAuthRelatedErrorMessage(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return AUTH_ERROR_HINTS.some((hint) => lowered.includes(hint));
+}
+
+function extractOutputFormatChoices(helpText: string): string[] {
+  const outputFormatLine = helpText
+    .split(/\r?\n/)
+    .find((line) => line.toLowerCase().includes(CLI.FLAGS.OUTPUT_FORMAT));
+
+  if (!outputFormatLine) {
+    return [];
+  }
+
+  const choicesMatch = outputFormatLine.match(/\[choices:\s*([^\]]+)\]/i);
+  if (!choicesMatch) {
+    return [];
+  }
+
+  const rawChoices = choicesMatch[1];
+  const quotedChoices = [...rawChoices.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  if (quotedChoices.length > 0) {
+    return quotedChoices;
+  }
+
+  return rawChoices
+    .split(",")
+    .map((choice) => choice.trim().replace(/^['"]|['"]$/g, ""))
+    .filter((choice) => choice.length > 0);
+}
+
+async function getGeminiCliCapabilities(deps?: GeminiExecutorDeps): Promise<GeminiCliCapabilities | null> {
+  const runCommand = deps?.executeCommandFn ?? executeCommand;
+
+  try {
+    const helpText = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP], undefined, {
+      timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
+    });
+
+    return {
+      hasAdminPolicyFlag: helpText.includes(CLI.FLAGS.ADMIN_POLICY),
+      outputFormatChoices: extractOutputFormatChoices(helpText),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function supportsAdminPolicyFlag(deps?: GeminiExecutorDeps): Promise<boolean> {
+  const capabilities = await getGeminiCliCapabilities(deps);
+  return capabilities?.hasAdminPolicyFlag ?? false;
+}
+
+export async function supportsRequiredOutputFormats(deps?: GeminiExecutorDeps): Promise<boolean> {
+  const capabilities = await getGeminiCliCapabilities(deps);
+  if (!capabilities) {
+    return false;
+  }
+
+  const available = new Set(capabilities.outputFormatChoices.map((choice) => choice.toLowerCase()));
+  return REQUIRED_OUTPUT_FORMATS.every((requiredFormat) => available.has(requiredFormat));
 }
 
 // ============================================================================
@@ -99,14 +210,16 @@ function buildGeminiArgs(prompt: string, model: string | null): string[] {
     args.push(CLI.FLAGS.MODEL, model);
   }
 
-  // Required flags for headless mode
-  args.push(CLI.FLAGS.YES); // Auto-approve file reads
+  // Required flags for headless mode and fail-closed read-only contract
   args.push(CLI.FLAGS.OUTPUT_FORMAT, CLI.OUTPUT_FORMATS.JSON);
+  args.push(CLI.FLAGS.APPROVAL_MODE, CLI.APPROVAL_MODES.DEFAULT);
 
-  // Add prompt
+  if (isAdminPolicyEnforced()) {
+    args.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+  }
+
+  // Explicit prompt flag required for non-interactive mode on current CLI line.
   args.push(CLI.FLAGS.PROMPT, prompt);
-
-  // NEVER add --yolo flag (read-only enforcement)
 
   return args;
 }
@@ -217,9 +330,11 @@ function extractFilesFromResponse(response: unknown): string[] {
 export async function executeGeminiCLI(
   prompt: string,
   toolName: ToolName,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  deps?: GeminiExecutorDeps
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
+  const runCommand = deps?.executeCommandFn ?? executeCommand;
 
   // Prepend system prompt
   const finalPrompt = `${SYSTEM_PROMPT}\n\n---\n\nUSER REQUEST:\n${prompt}`;
@@ -247,7 +362,7 @@ export async function executeGeminiCLI(
       }
 
       const args = buildGeminiArgs(finalPrompt, model);
-      const output = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress);
+      const output = await runCommand(CLI.COMMANDS.GEMINI, args, onProgress);
 
       // Parse the output
       const parsed = parseGeminiOutput(output);
@@ -316,40 +431,56 @@ export async function getGeminiVersion(): Promise<string | null> {
  *
  * @returns Object with auth status
  */
-export async function checkGeminiAuth(): Promise<{
+export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
   configured: boolean;
+  status: AuthStatus;
   method?: "api_key" | "google_login" | "vertex_ai";
+  reason?: string;
 }> {
+  const runCommand = deps?.executeCommandFn ?? executeCommand;
   // Check for API key
   if (process.env.GEMINI_API_KEY) {
-    return { configured: true, method: "api_key" };
+    return { configured: true, status: "configured", method: "api_key" };
   }
 
   // Check for Vertex AI credentials
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.VERTEX_AI_PROJECT) {
-    return { configured: true, method: "vertex_ai" };
+    return { configured: true, status: "configured", method: "vertex_ai" };
   }
 
   // Try a minimal test invocation to check for Google login session
+  const probeArgs: string[] = [
+    // Force a broadly-available model for this probe so health checks don't hang
+    // when preview models have poor availability.
+    CLI.FLAGS.MODEL,
+    MODELS.FLASH_FALLBACK,
+    CLI.FLAGS.OUTPUT_FORMAT,
+    CLI.OUTPUT_FORMATS.JSON,
+    CLI.FLAGS.APPROVAL_MODE,
+    CLI.APPROVAL_MODES.DEFAULT,
+  ];
+
+  if (isAdminPolicyEnforced()) {
+    probeArgs.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+  }
+
   try {
-    await executeCommand(CLI.COMMANDS.GEMINI, [
-      // Force a broadly-available model for this probe so health checks don't hang
-      // when preview models have poor availability.
-      CLI.FLAGS.MODEL,
-      MODELS.FLASH_FALLBACK,
-      CLI.FLAGS.PROMPT,
-      "test",
-      CLI.FLAGS.OUTPUT_FORMAT,
-      CLI.OUTPUT_FORMATS.JSON,
-    ]);
-    return { configured: true, method: "google_login" };
+    probeArgs.push(CLI.FLAGS.PROMPT, AUTH_PROBE_PROMPT);
+
+    await runCommand(CLI.COMMANDS.GEMINI, probeArgs, undefined, {
+      timeoutMs: AUTH_PROBE_TIMEOUT_MS,
+    });
+    return { configured: true, status: "configured", method: "google_login" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("auth") || message.includes("login") || message.includes("credential")) {
-      return { configured: false };
+
+    const isAuthFailure = isAuthRelatedErrorMessage(message);
+
+    if (isAuthFailure) {
+      return { configured: false, status: "unauthenticated", reason: message };
     }
-    // Other errors might still mean auth is configured
-    return { configured: true, method: "google_login" };
+
+    return { configured: false, status: "unknown", reason: message };
   }
 }
 
@@ -362,6 +493,7 @@ export async function validateGeminiSetup(): Promise<{
   installed: boolean;
   version: string | null;
   authenticated: boolean;
+  authStatus?: AuthStatus;
   authMethod?: string;
   errors: string[];
 }> {
@@ -377,15 +509,20 @@ export async function validateGeminiSetup(): Promise<{
   const version = installed ? await getGeminiVersion() : null;
 
   // Check auth
-  const auth = installed ? await checkGeminiAuth() : { configured: false };
+  const auth = installed ? await checkGeminiAuth() : { configured: false, status: "unknown" as AuthStatus };
   if (installed && !auth.configured) {
-    errors.push(ERROR_MESSAGES.AUTH_MISSING);
+    if (auth.status === "unknown") {
+      errors.push(ERROR_MESSAGES.AUTH_UNKNOWN);
+    } else {
+      errors.push(ERROR_MESSAGES.AUTH_MISSING);
+    }
   }
 
   return {
     installed,
     version,
     authenticated: auth.configured,
+    authStatus: auth.status,
     authMethod: auth.method,
     errors,
   };

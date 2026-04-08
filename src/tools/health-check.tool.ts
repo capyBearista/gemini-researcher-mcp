@@ -13,6 +13,10 @@ import {
   isGeminiCLIInstalled,
   getGeminiVersion,
   checkGeminiAuth,
+  hasReadOnlyPolicyFile,
+  isAdminPolicyEnforced,
+  supportsAdminPolicyFlag,
+  supportsRequiredOutputFormats,
   getProjectRoot,
   Logger,
 } from "../utils/index.js";
@@ -77,10 +81,16 @@ export const healthCheckTool: UnifiedTool = {
 
       // Check authentication
       let authConfigured = false;
+      let authStatus: "configured" | "unauthenticated" | "unknown" = "unknown";
       let authMethod: string | undefined;
+      const enforceAdminPolicy = isAdminPolicyEnforced();
+      const policyFilePresent = hasReadOnlyPolicyFile();
+      const adminPolicySupported = geminiOnPath && enforceAdminPolicy ? await supportsAdminPolicyFlag() : true;
+      const requiredOutputFormatsSupported = geminiOnPath ? await supportsRequiredOutputFormats() : false;
       if (geminiOnPath) {
         const auth = await checkGeminiAuth();
         authConfigured = auth.configured;
+        authStatus = auth.status;
         authMethod = auth.method;
       }
 
@@ -89,8 +99,23 @@ export const healthCheckTool: UnifiedTool = {
       if (!geminiOnPath) {
         warnings.push("Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli");
       }
-      if (geminiOnPath && !authConfigured) {
+      if (geminiOnPath && authStatus === "unauthenticated") {
         warnings.push("Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google'.");
+      }
+      if (geminiOnPath && authStatus === "unknown") {
+        warnings.push("Gemini CLI authentication status is unknown due to ambiguous probe failure.");
+      }
+      if (enforceAdminPolicy && !policyFilePresent) {
+        warnings.push("Read-only admin policy file missing. Expected: policies/read-only-enforcement.toml");
+      }
+      if (enforceAdminPolicy && geminiOnPath && !adminPolicySupported) {
+        warnings.push("Gemini CLI does not support --admin-policy. Upgrade to v0.36.0 or newer.");
+      }
+      if (geminiOnPath && !requiredOutputFormatsSupported) {
+        warnings.push("Gemini CLI does not support required output formats (json, stream-json). Upgrade to v0.36.0 or newer.");
+      }
+      if (!enforceAdminPolicy) {
+        warnings.push("Strict admin policy enforcement disabled by GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0.");
       }
 
       // Build diagnostics with proper typing
@@ -99,13 +124,20 @@ export const healthCheckTool: UnifiedTool = {
         geminiOnPath,
         geminiVersion,
         authConfigured,
-        readOnlyModeEnforced: true, // We never use --yolo flag
+        authStatus,
+        readOnlyModeEnforced: enforceAdminPolicy && policyFilePresent && adminPolicySupported,
         ...(authMethod && { authMethod }),
         ...(warnings.length > 0 && { warnings }),
       };
 
       // Determine overall status
-      const status: HealthCheckResponse["status"] = geminiOnPath && authConfigured ? "ok" : "degraded";
+      const status: HealthCheckResponse["status"] =
+        geminiOnPath &&
+        requiredOutputFormatsSupported &&
+        authConfigured &&
+        (!enforceAdminPolicy || (policyFilePresent && adminPolicySupported))
+          ? "ok"
+          : "degraded";
 
       const response: HealthCheckResponse = {
         tool: "health_check",

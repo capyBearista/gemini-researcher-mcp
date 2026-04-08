@@ -19,6 +19,13 @@ export {
   getGeminiVersion,
   checkGeminiAuth,
   validateGeminiSetup,
+  getReadOnlyPolicyPath,
+  hasReadOnlyPolicyFile,
+  isAdminPolicyEnforced,
+  supportsAdminPolicyFlag,
+  supportsRequiredOutputFormats,
+  isAuthRelatedErrorMessage,
+  type AuthStatus,
   type GeminiResponse,
   type ToolName,
 } from "./geminiExecutor.js";

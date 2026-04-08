@@ -167,6 +167,7 @@ export interface Diagnostics {
   geminiOnPath: boolean;
   geminiVersion?: string | null;
   authConfigured: boolean;
+  authStatus?: "configured" | "unauthenticated" | "unknown";
   authMethod?: string;
   readOnlyModeEnforced: boolean;
   gitIgnoreRespected?: boolean;
