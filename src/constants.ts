@@ -47,6 +47,8 @@ export const ERROR_MESSAGES = {
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@src/auth.ts explain what this does') or ask general questions",
   GEMINI_CLI_NOT_FOUND: "Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli",
   AUTH_MISSING: "Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google', or set GEMINI_API_KEY environment variable.",
+  AUTH_UNKNOWN:
+    "Gemini CLI authentication could not be confirmed due to an ambiguous probe failure. Check network/CLI health and run 'gemini' to verify login.",
   ADMIN_POLICY_MISSING:
     "Gemini CLI read-only admin policy not found. Reinstall package or verify policies/read-only-enforcement.toml exists.",
   ADMIN_POLICY_UNSUPPORTED:
@@ -309,6 +311,10 @@ Please fix the issues above and run 'npx gemini-researcher init' again.
    - Get API key: https://aistudio.google.com/app/apikey
    - Set in terminal: export GEMINI_API_KEY="your-key-here"
 → Run 'npx gemini-researcher init' for guided setup`,
+  STARTUP_AUTH_UNKNOWN: `❌ Gemini CLI authentication status is unknown
+→ Authentication could not be confirmed due to an ambiguous probe failure
+→ Verify network and CLI health, then run 'gemini' and ensure login succeeds
+→ Retry startup or run 'npx gemini-researcher init' for guided setup`,
   STARTUP_ADMIN_POLICY_MISSING: `❌ Gemini Researcher read-only policy missing
 → Expected file: policies/read-only-enforcement.toml
 → Reinstall package and retry
@@ -317,4 +323,7 @@ Please fix the issues above and run 'npx gemini-researcher init' again.
 → Upgrade Gemini CLI to v0.36.0 or newer
 → Current command: gemini --help
 → Run 'npx gemini-researcher init' after upgrade`,
+  STARTUP_ADMIN_POLICY_RELAXED: `⚠ Strict admin policy enforcement disabled by GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0
+→ Server will continue without hard-failing admin policy checks
+→ This weakens fail-closed safety guarantees`,
 } as const;

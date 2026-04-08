@@ -15,3 +15,28 @@ priority = 999
 toolName = "run_shell_command"
 decision = "deny"
 priority = 999
+
+[[rule]]
+toolName = "run_shell_cmd"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "edit_file"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "delete_file"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "move_file"
+decision = "deny"
+priority = 999
+
+[[rule]]
+toolName = "create_file"
+decision = "deny"
+priority = 999

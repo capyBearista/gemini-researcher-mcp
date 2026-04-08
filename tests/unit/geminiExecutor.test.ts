@@ -328,11 +328,13 @@ describe("validation functions", () => {
       // Test structure
       const authResult = {
         configured: hasApiKey,
+        status: hasApiKey ? "configured" : "unknown",
         method: hasApiKey ? "api_key" : undefined,
       };
 
       if (hasApiKey) {
         assert.strictEqual(authResult.method, "api_key");
+        assert.strictEqual(authResult.status, "configured");
       }
     });
 
@@ -343,12 +345,26 @@ describe("validation functions", () => {
 
       const authResult = {
         configured: hasVertexAI,
+        status: hasVertexAI ? "configured" : "unknown",
         method: hasVertexAI ? "vertex_ai" : undefined,
       };
 
       if (hasVertexAI) {
         assert.strictEqual(authResult.method, "vertex_ai");
+        assert.strictEqual(authResult.status, "configured");
       }
+    });
+
+    it("should model unknown auth state for ambiguous probe failures", () => {
+      const authResult = {
+        configured: false,
+        status: "unknown",
+        reason: "Command failed with exit code 1: transient network error",
+      };
+
+      assert.strictEqual(authResult.configured, false);
+      assert.strictEqual(authResult.status, "unknown");
+      assert.ok(authResult.reason.includes("network"));
     });
   });
 });

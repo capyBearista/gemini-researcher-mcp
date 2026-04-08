@@ -50,6 +50,9 @@ interface ModelTierConfig {
 }
 
 const READ_ONLY_POLICY_FILE = "read-only-enforcement.toml";
+const ADMIN_POLICY_ENFORCEMENT_ENV = "GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY";
+
+export type AuthStatus = "configured" | "unauthenticated" | "unknown";
 
 function getPoliciesDirectory(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +65,17 @@ export function getReadOnlyPolicyPath(): string {
 
 export function hasReadOnlyPolicyFile(): boolean {
   return fs.existsSync(getReadOnlyPolicyPath());
+}
+
+export function isAdminPolicyEnforced(): boolean {
+  const value = process.env[ADMIN_POLICY_ENFORCEMENT_ENV];
+
+  if (!value) {
+    return true;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return !(normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off");
 }
 
 export async function supportsAdminPolicyFlag(): Promise<boolean> {
@@ -129,7 +143,10 @@ function buildGeminiArgs(prompt: string, model: string | null): string[] {
   // Required flags for headless mode and fail-closed read-only contract
   args.push(CLI.FLAGS.OUTPUT_FORMAT, CLI.OUTPUT_FORMATS.JSON);
   args.push(CLI.FLAGS.APPROVAL_MODE, CLI.APPROVAL_MODES.DEFAULT);
-  args.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+
+  if (isAdminPolicyEnforced()) {
+    args.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+  }
 
   // Positional prompt for v0.36+ compatibility
   args.push(prompt);
@@ -344,41 +361,57 @@ export async function getGeminiVersion(): Promise<string | null> {
  */
 export async function checkGeminiAuth(): Promise<{
   configured: boolean;
+  status: AuthStatus;
   method?: "api_key" | "google_login" | "vertex_ai";
+  reason?: string;
 }> {
   // Check for API key
   if (process.env.GEMINI_API_KEY) {
-    return { configured: true, method: "api_key" };
+    return { configured: true, status: "configured", method: "api_key" };
   }
 
   // Check for Vertex AI credentials
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.VERTEX_AI_PROJECT) {
-    return { configured: true, method: "vertex_ai" };
+    return { configured: true, status: "configured", method: "vertex_ai" };
   }
 
   // Try a minimal test invocation to check for Google login session
+  const probeArgs: string[] = [
+    // Force a broadly-available model for this probe so health checks don't hang
+    // when preview models have poor availability.
+    CLI.FLAGS.MODEL,
+    MODELS.FLASH_FALLBACK,
+    CLI.FLAGS.OUTPUT_FORMAT,
+    CLI.OUTPUT_FORMATS.JSON,
+    CLI.FLAGS.APPROVAL_MODE,
+    CLI.APPROVAL_MODES.DEFAULT,
+  ];
+
+  if (isAdminPolicyEnforced()) {
+    probeArgs.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
+  }
+
+  probeArgs.push("test");
+
   try {
-    await executeCommand(CLI.COMMANDS.GEMINI, [
-      // Force a broadly-available model for this probe so health checks don't hang
-      // when preview models have poor availability.
-      CLI.FLAGS.MODEL,
-      MODELS.FLASH_FALLBACK,
-      CLI.FLAGS.OUTPUT_FORMAT,
-      CLI.OUTPUT_FORMATS.JSON,
-      CLI.FLAGS.APPROVAL_MODE,
-      CLI.APPROVAL_MODES.DEFAULT,
-      CLI.FLAGS.ADMIN_POLICY,
-      getReadOnlyPolicyPath(),
-      "test",
-    ]);
-    return { configured: true, method: "google_login" };
+    await executeCommand(CLI.COMMANDS.GEMINI, probeArgs);
+    return { configured: true, status: "configured", method: "google_login" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("auth") || message.includes("login") || message.includes("credential")) {
-      return { configured: false };
+
+    const lowered = message.toLowerCase();
+    const isAuthFailure =
+      lowered.includes("auth") ||
+      lowered.includes("login") ||
+      lowered.includes("credential") ||
+      lowered.includes("unauthenticated") ||
+      lowered.includes("permission denied");
+
+    if (isAuthFailure) {
+      return { configured: false, status: "unauthenticated", reason: message };
     }
-    // Other errors might still mean auth is configured
-    return { configured: true, method: "google_login" };
+
+    return { configured: false, status: "unknown", reason: message };
   }
 }
 
@@ -391,6 +424,7 @@ export async function validateGeminiSetup(): Promise<{
   installed: boolean;
   version: string | null;
   authenticated: boolean;
+  authStatus?: AuthStatus;
   authMethod?: string;
   errors: string[];
 }> {
@@ -406,15 +440,20 @@ export async function validateGeminiSetup(): Promise<{
   const version = installed ? await getGeminiVersion() : null;
 
   // Check auth
-  const auth = installed ? await checkGeminiAuth() : { configured: false };
+  const auth = installed ? await checkGeminiAuth() : { configured: false, status: "unknown" as AuthStatus };
   if (installed && !auth.configured) {
-    errors.push(ERROR_MESSAGES.AUTH_MISSING);
+    if (auth.status === "unknown") {
+      errors.push(ERROR_MESSAGES.AUTH_UNKNOWN);
+    } else {
+      errors.push(ERROR_MESSAGES.AUTH_MISSING);
+    }
   }
 
   return {
     installed,
     version,
     authenticated: auth.configured,
+    authStatus: auth.status,
     authMethod: auth.method,
     errors,
   };

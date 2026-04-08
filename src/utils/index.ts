@@ -21,7 +21,9 @@ export {
   validateGeminiSetup,
   getReadOnlyPolicyPath,
   hasReadOnlyPolicyFile,
+  isAdminPolicyEnforced,
   supportsAdminPolicyFlag,
+  type AuthStatus,
   type GeminiResponse,
   type ToolName,
 } from "./geminiExecutor.js";
