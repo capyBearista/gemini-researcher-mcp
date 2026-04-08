@@ -1,4 +1,4 @@
-# "Better Gemini MCP" — Gemini CLI Proxy MCP Server — Product Requirements Document (PRD)
+# Gemini Researcher MCP — Gemini CLI Proxy MCP Server — Product Requirements Document (PRD)
 
 ## 1) Executive Summary
 
@@ -10,7 +10,7 @@ Build a **simple, stateless MCP server** that acts as a lightweight "research pr
 2. **Reduce calling-agent model usage**: move "deep reading and synthesis" workload into Gemini CLI, keeping the calling agent's participation minimal.
 3. **Painless setup**: one-command installation with friendly validation and guidance for first-time users.
 4. **Structured research outputs**: return sanitized, JSON-formatted responses that agents can easily parse and use.
-5. **Read-only safety by default**: enforce read-only analysis via Gemini CLI tool restrictions.
+5. **Read-only safety by default**: enforce read-only analysis via approval mode + admin policy.
 
 ### 1.3 Non-Goals (explicit exclusions)
 - **Session management**: No persistent sessions, context files, or session tracking (fully stateless).
@@ -18,7 +18,7 @@ Build a **simple, stateless MCP server** that acts as a lightweight "research pr
 - **Streaming raw terminal UI**: no forwarding of Gemini CLI TTY UI; only structured tool results.
 - **Google Gemini Node SDK**: do not use the SDK; invoke the `gemini` binary directly.
 - **Sandboxing (v1)**: do not implement `--sandbox` in v1 (may be revisited later).
-- **Docker distribution (v1)**: focus on `npx` runnable MCP server and global install; Docker can come later.
+- **Alternative execution engines**: do not add SDK-based runtime paths; invoke Gemini CLI directly.
 - **Multi-turn conversation continuity**: Each tool call is independent; agents must include full context in each request.
 
 ---
@@ -108,10 +108,11 @@ This tool is optimized for faster turnaround and lower cost using flash models.
 2. **Construct Gemini CLI invocation**
    - Prepend read-only safety instructions to `prompt`.
    - If `focus` is specified, inject focus context (e.g., "Focus on security implications...").
-   - Select model based on tool: `gemini-2.0-flash-exp` (default), fallback `gemini-1.5-flash` on quota error.
+   - Select model based on tool: `gemini-3-flash-preview` (default), fallback `gemini-2.5-flash` on quota/capacity errors, then auto-select.
 3. **Execute Gemini CLI**
-   - Run in headless mode with `--output-format json` and `-y` (auto-approve reads).
-   - Use read-only tool configuration (see §8.4).
+   - Run in headless mode with `--output-format json` and `--approval-mode default`.
+   - Pass prompt as positional argument (no `-p`).
+   - Enforce `--admin-policy <path>` by default (toggleable for advanced users via env).
 4. **Parse and sanitize output**
    - Extract `response` from Gemini's JSON output.
    - Extract `stats` (tokens used, files accessed if available).
@@ -200,8 +201,9 @@ This tool is optimized for deeper reasoning using pro models with larger context
 
 #### Behavior
 Same as `quick_query`, with different **server-owned model selection**:
-- Default model: `gemini-2.0-pro-exp`
-- Fallback model (quota/availability): `gemini-1.5-pro`
+- Default model: `gemini-3-pro-preview`
+- Fallback model (quota/availability): `gemini-2.5-pro`
+- Safety-net model: auto-select (omit `-m`)
 
 If `citationMode` is `paths_only`, instruct Gemini to include a "Files referenced" section listing file paths (no line numbers required).
 
@@ -359,6 +361,24 @@ Confirm the MCP server is running and able to service requests. Validate Gemini 
 - `"degraded"` - Server running but Gemini CLI has issues (not installed, missing auth, etc.)
 - `"error"` - Health check encountered an error during diagnostics
 
+#### Auth and enforcement state semantics
+
+Diagnostics should include auth confidence and enforcement details:
+
+| Field | Values | Meaning |
+|---|---|---|
+| `authStatus` | `configured` \| `unauthenticated` \| `unknown` | Explicit auth confidence state |
+| `readOnlyModeEnforced` | `true` \| `false` | Whether strict enforcement is active and verifiable |
+
+Auth state meaning:
+- `configured`: auth confirmed.
+- `unauthenticated`: auth clearly missing/invalid.
+- `unknown`: auth probe could not confirm due to ambiguous failure.
+
+Health status mapping:
+- `ok` only when Gemini is available, auth is configured, and strict enforcement checks are satisfied (or intentionally relaxed via env).
+- `degraded` for auth uncertainty/failure or enforcement gaps.
+
 #### Output Contract (returned as JSON string)
 ```json
 {
@@ -373,8 +393,10 @@ Confirm the MCP server is running and able to service requests. Validate Gemini 
     "geminiOnPath": true,
     "geminiVersion": "2.1.0",
     "authConfigured": true,
+    "authStatus": "configured",
     "authMethod": "google_login",
-    "readOnlyModeEnforced": true
+    "readOnlyModeEnforced": true,
+    "warnings": []
   }
 }
 ```
@@ -455,9 +477,11 @@ Also respect:
   - `npm install -g @google/gemini-cli`
 
 ### 7.2 Headless Invocation
-- Use headless mode with `--prompt` / `-p`.
-- Use `-y` to auto-approve file reads.
+- Use headless mode with positional prompt argument.
 - Use `--output-format json` for structured parsing.
+- Use `--approval-mode default` (no `-y`, no `--yolo`).
+- Enforce `--admin-policy <path>` by default.
+- Respect `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0|false|no|off` as explicit relaxed mode.
 
 ### 7.3 Model Selection and Fallback Strategy
 
@@ -484,13 +508,20 @@ Users must enable Preview Features in Gemini CLI to access Gemini 3 models:
 
 If Gemini 3 models are unavailable (user hasn't enabled Preview Features or lacks access), the server will automatically fall back to Gemini 2.5 models without user intervention.
 
-**Reference:** See [Gemini 3 documentation](../references/gemini-cli-docs/get-started/gemini-3.md) for setup details.
+**Reference:** See local bundled docs in `docs/gemini-cli/` for CLI behavior details.
 
 ### 7.4 Read-Only Enforcement
 
-**Good News:** Gemini CLI is **read-only by default** in headless mode without the `--yolo` or `-y` flags. Tools like `write_file`, `replace`, and `run_shell_command` are not available unless explicitly enabled.
+Read-only protection is enforced by server contract, not by assumption:
 
-**Important:** The MCP server does NOT use `--yolo` flag, ensuring Gemini operates in read-only mode.
+1. Runtime uses `--approval-mode default`.
+2. Runtime passes `--admin-policy` by default using bundled policy `policies/read-only-enforcement.toml`.
+3. Bundled policy denies known mutating tools (for example `write_file`, `replace`, `run_shell_command`, plus alias variants).
+4. `-y` / `--yolo` are never used in server-generated argv.
+
+**Caveat:** Policy is deny-list based. New mutating tool names introduced by upstream may require policy updates.
+
+**Operational note:** Extensions remain enabled; strict admin policy should remain enabled in production.
 
 ### 7.5 Server-Managed System Prompt
 
@@ -501,7 +532,7 @@ const SYSTEM_PROMPT = `
 You are analyzing a codebase on behalf of an AI coding agent.
 
 CRITICAL CONSTRAINTS:
-- Read-only analysis ONLY (no write/edit tools available without --yolo flag)
+- Read-only analysis ONLY (write/edit tools are blocked by enforced admin policy)
 - Do NOT suggest code changes, patches, or file modifications
 - Do NOT attempt to use run_shell_command or write_file (not available)
 
@@ -623,7 +654,11 @@ On server start, validate:
    - Fallback: check for `GEMINI_API_KEY` environment variable
    - Fallback: check for Vertex AI credentials
 3. Gemini CLI supports required flags: run `gemini --help` and verify presence of `--output-format json`, `--output-format stream-json`.
-4. Optionally check if Preview Features are enabled (for Gemini 3 access) - warn if disabled but don't fail.
+4. Read-only policy enforcement prerequisites:
+   - bundled policy file exists (`policies/read-only-enforcement.toml`) when strict mode enabled.
+   - `gemini --help` includes `--admin-policy` when strict mode enabled.
+   - if strict mode is relaxed via `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0|false|no|off`, emit warning.
+5. Optionally check if Preview Features are enabled (for Gemini 3 access) - warn if disabled but don't fail.
 
 **Fail fast with actionable messages** if validation fails:
 ```
@@ -664,7 +699,8 @@ npx gemini-researcher init
    - If none found, display auth setup options (Login with Google recommended, API key alternative, Vertex AI for enterprise).
    - Show links to Gemini CLI authentication docs.
 3. **Test Gemini CLI**
-   - Run a minimal test invocation: `gemini -p "test" --output-format json`
+   - Run a minimal test invocation with positional prompt and current safety contract:
+     `gemini --output-format json --approval-mode default --admin-policy <path> "test"`
    - If successful, confirm setup is working.
 4. **Display next steps**
    - Show how to configure MCP client (Claude Desktop, VS Code).
@@ -674,7 +710,7 @@ npx gemini-researcher init
 ```bash
 $ npx gemini-researcher init
 
-Better Gemini MCP — Setup Wizard
+Gemini Researcher — Setup Wizard
 ================================
 
 [1/3] Checking Gemini CLI installation...
@@ -713,7 +749,7 @@ Documentation: https://github.com/capyBearista/gemini-researcher
 ```bash
 $ npx gemini-researcher init
 
-Better Gemini MCP — Setup Wizard
+Gemini Researcher — Setup Wizard
 ================================
 
 [1/3] Checking Gemini CLI installation...
@@ -810,17 +846,19 @@ If a user runs the server directly (`npx gemini-researcher`) without running `in
 
 ### MVP (v1.0)
 - ✅ MCP server over stdio
-- ✅ Tools: `quick_query`, `deep_research`, `analyze_directory`, `validate_paths`, `health_check`
+- ✅ Tools: `quick_query`, `deep_research`, `analyze_directory`, `validate_paths`, `health_check`, `fetch_chunk`
 - ✅ Stateless operation (no session files)
-- ✅ Read-only enforcement via Gemini CLI tool configuration
+- ✅ Read-only enforcement via approval mode + admin policy contract
 - ✅ `.gitignore` respect for directory enumeration
 - ✅ Setup wizard (`init` command) with validation and friendly errors
 - ✅ Progress notifications for long-running operations
 - ✅ Structured JSON outputs
 - ✅ Quota fallback logic (flash/pro models)
+- ✅ Response chunking for large outputs (`fetch_chunk`, cache TTL)
+- ✅ Auth confidence states and degraded diagnostics (`configured|unauthenticated|unknown`)
+- ✅ Command logging prompt redaction for positional prompt contract
 
 ### Post-v1 Enhancements
-- ⏭️ Response chunking for very large outputs (return first chunk + cacheKey for retrieval)
 - ⏭️ Custom allowlist configuration (beyond project root)
 - ⏭️ Docker distribution for isolated environments
 - ⏭️ Sandbox support (if Gemini CLI sandbox mode proves useful)
@@ -930,7 +968,7 @@ gemini-researcher/
 | `deep_research`      | `gemini-3-pro-preview`   | `gemini-2.5-pro`     | Auto-select          | Max context, best reasoning        |
 | `analyze_directory`  | `gemini-3-flash-preview` | `gemini-2.5-flash`   | Auto-select          | Speed optimized, sufficient quality|
 
-**Note:** Gemini 3 models require Preview Features enabled in Gemini CLI settings. See [Gemini 3 documentation](../references/gemini-cli-docs/get-started/gemini-3.md).
+**Note:** Gemini 3 models require Preview Features enabled in Gemini CLI settings. See local docs in `docs/gemini-cli/`.
 
 ---
 
@@ -943,6 +981,9 @@ gemini-researcher/
 | `GEMINI_CLI_NOT_FOUND`  | `gemini` binary not on PATH                 | Install Gemini CLI: `npm install -g @google/gemini-cli` |
 | `GEMINI_CLI_ERROR`      | Gemini CLI execution failed                 | Check stderr output for details                |
 | `AUTH_MISSING`          | Gemini CLI authentication not configured    | Run `gemini` and select "Login with Google" (recommended), or set `GEMINI_API_KEY` |
+| `AUTH_UNKNOWN`          | Auth could not be confirmed (ambiguous probe failure) | Verify CLI/network, confirm interactive `gemini` login, retry |
+| `ADMIN_POLICY_MISSING`  | Bundled admin policy file not found         | Reinstall package or restore `policies/read-only-enforcement.toml` |
+| `ADMIN_POLICY_UNSUPPORTED` | Gemini CLI lacks `--admin-policy` support | Upgrade Gemini CLI to v0.36.0+ |
 | `QUOTA_EXCEEDED`        | Gemini API quota exhausted (after fallback) | Wait for quota reset or upgrade plan           |
 | `CACHE_EXPIRED`         | Chunk cache key not found or expired        | Re-run original query to regenerate response   |
 | `INVALID_CHUNK_INDEX`   | Requested chunk index out of range          | Check total chunks in original response        |

@@ -46,7 +46,41 @@ Instead of copying entire files into your agent's context (burning tokens and cl
 
 ## Overview
 
-Gemini Researcher accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless, read-only mode to perform large-context analysis on local files referenced with `@path`. Results are returned as pretty-printed JSON strings suitable for programmatic consumption by agent clients.
+Gemini Researcher accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless mode to perform large-context analysis on local files referenced with `@path`. Results are returned as pretty-printed JSON strings suitable for programmatic consumption by agent clients.
+
+### Runtime safety contract
+
+Gemini Researcher enforces this invocation contract for analysis requests:
+
+```bash
+gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] "<positional prompt>"
+```
+
+- The server uses a positional prompt argument (no `-p` in server-generated argv).
+- The server does not use `-y`/`--yolo` in server-generated argv.
+- Read-only behavior is enforced via bundled admin policy by default.
+- Admin-policy strict enforcement can be relaxed with `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0` (or `false|no|off`).
+
+### Read-only policy behavior
+
+- Default mode is strict fail-closed enforcement.
+- The bundled policy denies known mutating tools (for example: `write_file`, `replace`, `run_shell_command`).
+- The policy is deny-list based. If Gemini introduces new mutating tool names in future releases, policy updates may be required.
+- Extensions remain enabled by design. This is convenient, but means policy enforcement should remain enabled in production.
+
+### Auth and health semantics
+
+When you run `health_check` with `includeDiagnostics: true`, diagnostics include auth state and enforcement status.
+
+| authStatus | Meaning | health_check impact |
+|---|---|---|
+| `configured` | Auth confirmed (API key, Vertex, or successful CLI probe) | Eligible for `ok` |
+| `unauthenticated` | Auth is definitively missing/invalid | `degraded` |
+| `unknown` | Auth could not be confirmed due to ambiguous probe failure | `degraded` |
+
+`health_check.status` is:
+- `ok` only when Gemini is available, auth is configured, and strict read-only enforcement is satisfied (or intentionally relaxed by env toggle).
+- `degraded` for all setup/safety/auth uncertainty paths.
 
 ## Prerequisites
 - Node.js 18+ installed
@@ -322,6 +356,10 @@ For MCP client configuration with Docker:
 ## Troubleshooting (common issues)
 - `GEMINI_CLI_NOT_FOUND`: Install Gemini CLI: `npm install -g @google/gemini-cli`
 - `AUTH_MISSING`: Run `gemini`, and authenticate or set `GEMINI_API_KEY`
+- `AUTH_UNKNOWN`: Auth could not be confirmed (often network/CLI probe failure). Verify `gemini` works interactively, then retry.
+- `ADMIN_POLICY_MISSING`: Reinstall package or verify `policies/read-only-enforcement.toml` exists in installed package.
+- `ADMIN_POLICY_UNSUPPORTED`: Upgrade Gemini CLI to v0.36.0+ (`gemini --help` should include `--admin-policy`).
+- `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0`: Disables strict startup hard-fail policy enforcement. This weakens fail-closed guarantees.
 - `.gitignore` blocking files: Gemini respects `.gitignore` by default; toggle `fileFiltering.respectGitIgnore` in `gemini /settings` if you intentionally want ignored files included (note: this changes Gemini behavior globally)
 - `PATH_NOT_ALLOWED`: All `@path` references must resolve inside the configured project root (`process.cwd()` by default). Use `validate_paths` to pre-check paths.
 - `QUOTA_EXCEEDED`: Server retries with fallback models; if all tiers are exhausted, reduce scope (use `quick_query`) or wait for quota reset.
