@@ -240,7 +240,7 @@ OUTPUT FORMAT:
 
 export const SERVER_INFO = {
   NAME: "gemini-researcher",
-  VERSION: "1.2.0",
+  VERSION: "1.2.1",
   DESCRIPTION: "Stateless MCP server that proxies research queries to Gemini CLI",
 } as const;
 

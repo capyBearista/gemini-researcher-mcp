@@ -1,6 +1,6 @@
 {
   "name": "gemini-researcher",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "mcpName": "io.github.capyBearista/gemini-researcher",
   "description": "Stateless MCP server that proxies research queries to Gemini CLI, reducing agent context/model usage",
   "type": "module",
