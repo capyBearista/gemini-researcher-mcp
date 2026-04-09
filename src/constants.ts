@@ -240,7 +240,7 @@ OUTPUT FORMAT:
 
 export const SERVER_INFO = {
   NAME: "gemini-researcher",
-  VERSION: "1.2.1",
+  VERSION: "1.2.2",
   DESCRIPTION: "Stateless MCP server that proxies research queries to Gemini CLI",
 } as const;
 
@@ -295,7 +295,7 @@ Next steps:
 3. Restart your MCP client
 4. Test with: "Can you list your available tools?"
 
-Documentation: https://github.com/capyBearista/gemini-researcher
+Documentation: https://github.com/capyBearista/gemini-researcher-mcp
 `,
 
   FIX_ISSUES: `
