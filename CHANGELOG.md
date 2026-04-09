@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-09
+
+### Added
+
+- New canonical runtime contract document at `docs/runtime-contract.md` covering invocation semantics, model-tier fallback, auth tri-state behavior, health semantics, setup checks, and logging redaction expectations.
+- Live MCP smoke runner at `tests/manual/mcp-live-smoke.mjs` with fast and heavy profiles for real-environment validation.
+- Bundled strict read-only policy file at `policies/read-only-enforcement.toml` for `--admin-policy` enforcement.
+
+### Changed
+
+- Hardened Gemini CLI invocation contract for headless execution:
+  - Server-generated argv now standardizes on `-p "<prompt>"` for prompt passing.
+  - Runtime contract now requires `--approval-mode default` and conditionally applies `--admin-policy <path>` when strict enforcement is enabled.
+- Strengthened startup capability validation:
+  - Environment validation now verifies required `--output-format` choices (`json`, `stream-json`) are supported by the installed Gemini CLI.
+  - Unsupported output-format capability is treated as degraded/not-ready with explicit diagnostics.
+- Improved authentication and diagnostics consistency:
+  - Centralized auth-like error classification and reused it across setup and tool execution paths.
+  - Auth probe outcomes now preserve fail-closed tri-state semantics (`configured`, `unauthenticated`, `unknown`).
+- Improved operational safety and observability:
+  - Prompt-bearing command args are redacted in logs.
+  - Health diagnostics better surface enforcement/capability status and actionable warnings.
+- Documentation realignment:
+  - PRD and README now align with runtime-contract as canonical runtime source.
+  - Contributing guide includes runtime-impacting docs-drift prevention checklist.
+
+### Fixed
+
+- Reduced startup/runtime ambiguity around authentication and CLI capability handling, preventing false-positive readiness under unsupported or uncertain conditions.
+- Tightened read-only policy tool mapping to canonical Gemini tool names to keep enforcement explicit and warning-free.
+
+### Tests
+
+- Expanded unit coverage for:
+  - exact CLI argv contract expectations,
+  - auth classification behavior,
+  - output-format capability parsing,
+  - logging redaction behavior.
+
 ## [1.1.2] - 2026-01-26
 
 ### ⚠️ Docker-only release (npm package unchanged at 1.1.1)

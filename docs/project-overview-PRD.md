@@ -5,9 +5,9 @@
 - **Document type**: Living specification
 - **Status**: Active
 - **Primary owner**: Project maintainers
-- **Last validated**: 2026-04-08
+- **Last validated**: 2026-04-09
 - **Validated baseline**:
-  - npm package line: `1.1.1`
+  - npm package line: `1.2.0`
   - Docker-only release line: `1.1.2`
 
 ## 1) Executive Summary
