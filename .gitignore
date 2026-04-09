@@ -14,6 +14,7 @@ dist/
 .vscode/
 .github/*
 !.github/workflows/
+!.github/dependabot.yml
 .idea/
 *.swp
 *.swo
