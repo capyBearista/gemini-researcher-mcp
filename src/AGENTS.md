@@ -33,16 +33,17 @@ src/
   - Example: `src/index.ts`
   - Pattern: Register tools iteratively from `src/tools/registry.ts`
 
-#### Error Handling
+#### Error Handling & Diagnostics
 - ✅ Throw clear Error objects or `McpError` (from SDK) if applicable
 - ✅ Handle JSON parsing safely in `src/utils/`
+- ✅ **DO**: Treat auth as tri-state (`configured`, `unauthenticated`, `unknown`) and fail-closed for ambiguity.
 
 ## Key Files
 
 ### Core Files (understand these first)
 - `src/index.ts` - Main server initialization and capability registration
 - `src/tools/registry.ts` - Registry array of all available MCP tools
-- `src/utils/geminiExecutor.ts` - Core logic for spawning the Gemini CLI
+- `src/utils/geminiExecutor.ts` - Core logic for spawning the Gemini CLI (read-only enforced)
 
 ## Quick Search Commands
 
@@ -55,6 +56,8 @@ rg -n "export const" src/tools
 
 - **JSON Output**: The Gemini CLI output might contain markdown blocks (` ```json ... ``` `). Always sanitize before parsing.
 - **Node Environment**: Use ES Modules (`import`/`export`), not CommonJS (`require`).
+- **Headless CLI Arguments**: Ensure `-p "<prompt>"` is used for non-interactive execution and NEVER use `-y/--yolo` in generated argv.
+- **Redaction**: Ensure unknown flags and credentials are redacted in command logs.
 
 ## Pre-PR Checklist
 

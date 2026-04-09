@@ -16,6 +16,7 @@ Subdirectories contain specialized AGENTS.md files that extend these rules.
 - **MUST** include tests for all new features
 - **MUST** run `npm run lint` and `npm test` before committing
 - **MUST NOT** commit secrets, API keys, or tokens (especially `GEMINI_API_KEY`)
+- **MUST** respect the runtime contract defined in `docs/runtime-contract.md`
 
 ### Best Practices (SHOULD)  
 - **SHOULD** prefer pure functions and immutable state
@@ -39,6 +40,7 @@ Subdirectories contain specialized AGENTS.md files that extend these rules.
 - `npm test` - Run all tests
 - `npm run test:unit` - Run only unit tests
 - `npm run test:integration` - Run only integration tests
+- `npm run test:smoke:live` - Run live e2e smoke tests (requires authentication)
 
 ### Quality Gates (run before PR)
 ```bash
@@ -54,6 +56,7 @@ npm run lint && npm test
   - Setup: `src/setup/` → CLI init wizard
 
 ### Infrastructure
+- **`docs/`** → Documentation and Contracts (`runtime-contract.md` is canonical)
 - **`.github/workflows/`** → CI/CD pipelines (publishing)
 
 ### Testing
@@ -90,12 +93,12 @@ npx depcheck
 ### Secrets Management
 - **NEVER** commit tokens, API keys, or credentials
 - Use `.env` or standard environment variables for local secrets (already ignored)
-- PII must be redacted in logs
+- PII and Prompt payloads must be redacted in logs
 
 ### Safe Operations
 - Review generated bash commands before execution
 - Confirm before: git force push, rm -rf
-- **Critical**: Ensure the server *never* attempts to write files or run destructive commands via Gemini CLI.
+- **Critical**: Ensure the server *never* attempts to write files or run destructive commands via Gemini CLI. Read-only safety is contract-enforced via `policies/read-only-enforcement.toml`.
 
 ## Git Workflow
 

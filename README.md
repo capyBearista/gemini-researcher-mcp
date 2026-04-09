@@ -8,20 +8,20 @@
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@capyBearista/gemini-researcher/badge" />
 </a>
 
-A lightweight, stateless MCP (Model Context Protocol) server that lets developer agents (Claude Code, GitHub Copilot) delegate deep repository analysis to the Gemini CLI. The server is read-only, returns structured JSON (as text content), and is optimized to reduce the calling agent's context and model usage.
+A lightweight, stateless MCP (Model Context Protocol) server that lets developer agents (Claude Code, GitHub Copilot) hand off deep repository analysis to the Gemini CLI. The server is read-only, returns structured JSON (as text content), and is designed to reduce the calling agent's context and model usage.
 
-**Status:** v1 complete. Core features are stable, but still early days. Feedback welcome!
+Status: v1 complete. Core features are stable, but still early days. Feedback welcome!
 
-**If this project extended the lifespan of your usage window,** ⭐ please consider giving it a star! :)
+**If this saved you tokens,** ⭐ please consider giving it a star! :)
 
-**Primary goals:**
+The primary goals:
 - Reduce agent context usage by letting Gemini CLI read large codebases locally and do its own research
 - Reduce calling-agent model usage by offloading heavy analysis to Gemini
 - Keep the server stateless and read-only for safety
 
 **Why use this?**
 
-Instead of copying entire files into your agent's context (burning tokens and cluttering the conversation), this server lets Gemini CLI read files directly from your project. Your agent sends a research query, Gemini does the heavy lifting with its large context window, and returns structured results. You save tokens, your agent stays focused, and complex codebase analysis becomes practical.
+Instead of copying entire files into your agent's context (burning tokens and cluttering the conversation), this server lets Gemini CLI read files directly from your project. Your agent sends a research query, Gemini reads and synthesizes using its large context window, and returns structured results. You save tokens, your agent stays focused, and complex codebase analysis becomes practical.
 
 **Verified clients:** Claude Code, Cursor, VS Code (GitHub Copilot)
 > [!NOTE] 
@@ -46,11 +46,11 @@ Instead of copying entire files into your agent's context (burning tokens and cl
 
 ## Overview
 
-Gemini Researcher accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless mode to perform large-context analysis on local files referenced with `@path`. Results are returned as pretty-printed JSON strings suitable for programmatic consumption by agent clients.
+Gemini Researcher accepts research-style queries over the MCP protocol and spawns the Gemini CLI in headless mode to analyze local files referenced with `@path`. Results are returned as formatted JSON strings for agent clients.
 
 ### Runtime safety contract
 
-Canonical runtime semantics are maintained in `docs/runtime-contract.md`. This section is a quick summary for end users.
+Canonical runtime semantics are maintained in `docs/runtime-contract.md`.
 
 Gemini Researcher enforces this invocation contract for analysis requests:
 
@@ -232,16 +232,16 @@ Ask your agent: "Use gemini-researcher to analyze the project."
 
 ## Tools
 
-All tools return structured JSON (as MCP text content). Large responses are automatically chunked (~10KB per chunk) and cached for 1 hour.
+All tools return structured JSON (as MCP text content). Large responses are chunked (~10KB per chunk) and cached for 1 hour.
 
 | Tool | Purpose | When to use |
 |------|---------|-------------|
-| **quick_query** | Fast analysis with flash model | Quick questions about specific files or small code sections |
-| **deep_research** | In-depth analysis with pro model | Complex multi-file analysis, architecture reviews, security audits |
-| **analyze_directory** | Map directory structure | Understanding unfamiliar codebases, generating project overviews |
-| **validate_paths** | Pre-check file paths | Verify files exist before running expensive queries |
-| **health_check** | Diagnostics | Troubleshooting server/Gemini CLI issues |
-| **fetch_chunk** | Get chunked responses | Retrieve remaining parts of large responses |
+| `quick_query` | Fast analysis with flash model | Quick questions about specific files or small code sections |
+| `deep_research` | In-depth analysis with pro model | Complex multi-file analysis, architecture reviews, security audits |
+| `analyze_directory` | Map directory structure | Understanding unfamiliar codebases, generating project overviews |
+| `validate_paths` | Pre-check file paths | Verify files exist before running expensive queries |
+| `health_check` | Diagnostics | Troubleshooting server/Gemini CLI issues |
+| `fetch_chunk` | Get chunked responses | Retrieve remaining parts of large responses |
 
 ### Example workflows
 
@@ -368,7 +368,7 @@ For MCP client configuration with Docker:
 
 ## Contributing
 
-We welcome contributions! Please read the [Contributing Guide](./CONTRIBUTING.md) to get started.
+Read the [Contributing Guide](./CONTRIBUTING.md) to get started.
 
 Quick links:
 - [Development setup](./CONTRIBUTING.md#development-setup)

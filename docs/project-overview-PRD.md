@@ -54,11 +54,11 @@ The product exists to reduce the calling agent's context pressure and model usag
 
 ## 3) Product Principles
 
-1. **Stateless by design**: each call is independent.
-2. **Safety by default**: read-only contract is enforced, not implied.
-3. **Structured outputs**: JSON content returned consistently for tool consumers.
-4. **Fail-closed diagnostics**: uncertainty should degrade health, not fake success.
-5. **Contributor clarity**: runtime details have one canonical source.
+1. Stateless by design: each call is independent.
+2. Safety by default: read-only contract is enforced, not implied.
+3. Structured outputs: JSON content returned consistently for tool consumers.
+4. Fail-closed diagnostics: uncertainty should degrade health, not fake success.
+5. Contributor clarity: runtime details have one canonical source.
 
 ## 4) System Overview
 
@@ -183,14 +183,14 @@ If checks fail, output must provide actionable remediation guidance.
 ## 11) Success Metrics
 
 1. Typical workflows avoid large manual file pastes into calling agents.
-2. Delegated analysis quality is sufficient for practical coding workflows.
-3. Setup from clean environment remains straightforward.
-4. Read-only guarantees remain intact in runtime behavior.
-5. Runtime reliability remains high outside quota/auth external failures.
+2. Delegated analysis quality works for typical coding workflows.
+3. Setup from a clean environment is straightforward.
+4. Read-only guarantees hold in runtime behavior.
+5. Runtime reliability is high outside quota/auth external failures.
 
 ## 12) Roadmap (Post-v1)
 
-Planned enhancement areas:
+Post-v1 planned areas:
 
 - custom allowlist configuration beyond project root
 - sandbox mode support if Gemini CLI support proves stable

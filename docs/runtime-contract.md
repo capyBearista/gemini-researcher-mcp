@@ -48,7 +48,7 @@ Fallback trigger:
 
 ## 3) Read-Only Enforcement
 
-Read-only safety is contract-enforced, not best-effort.
+Read-only safety is enforced by contract.
 
 Strict mode behavior:
 
@@ -66,7 +66,7 @@ When strict mode is disabled, startup and diagnostics must report this as a weak
 
 ## 4) Auth Classification Contract
 
-Auth state is tri-state and fail-closed:
+Auth state uses three explicit values and defaults to closed on failure:
 
 | `authStatus` | Meaning | Behavior |
 |---|---|---|
