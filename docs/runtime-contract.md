@@ -3,17 +3,17 @@
 ## Document Status
 
 - **Role**: Canonical source for runtime behavior and safety invariants
-- **Status**: Living specification (normative)
+- **Status**: Living specification
 - **Audience**: Maintainers and contributors
 - **Last validated**: 2026-04-08 against current `main`
 
 ## Scope and Precedence
 
-This document defines the production runtime contract for Gemini Researcher. If this document conflicts with
-`docs/project-overview-PRD.md`, `README.md`, or `CONTRIBUTING.md`, this document is authoritative for runtime
-semantics.
+This document defines production runtime behavior for Gemini Researcher. If it conflicts with
+`docs/project-overview-PRD.md`, `README.md`, or `CONTRIBUTING.md`, this document takes precedence for runtime
+behavior.
 
-The PRD is the product-level spec. This file is the execution-level contract.
+The PRD describes product intent. This file defines runtime behavior.
 
 ## 1) Invocation Contract (Canonical)
 
@@ -23,7 +23,7 @@ All server-generated Gemini invocations for query tools follow this pattern:
 gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] -p "<prompt>"
 ```
 
-Required invariants:
+Required rules:
 
 1. `--output-format json` is always present.
 2. `--approval-mode default` is always present.
@@ -41,10 +41,10 @@ Model selection is server-owned and tool-specific.
 | `deep_research` | `gemini-3-pro-preview` | `gemini-2.5-pro` | auto-select (omit `-m`) |
 | `analyze_directory` | `gemini-3-flash-preview` | `gemini-2.5-flash` | auto-select (omit `-m`) |
 
-Fallback trigger:
+When fallback happens:
 
-- Retry to the next tier only for quota/capacity style failures.
-- Non-quota failures fail fast and return structured errors.
+- Retry to the next tier only for quota or capacity failures.
+- For other failures, stop immediately and return structured errors.
 
 ## 3) Read-Only Enforcement
 
@@ -66,13 +66,13 @@ When strict mode is disabled, startup and diagnostics must report this as a weak
 
 ## 4) Auth Classification Contract
 
-Auth state uses three explicit values and defaults to closed on failure:
+Auth state has three values and treats failed probes as not configured:
 
 | `authStatus` | Meaning | Behavior |
 |---|---|---|
 | `configured` | Authentication confirmed | normal operation allowed |
-| `unauthenticated` | Explicit auth failure | setup/startup fail; health degraded |
-| `unknown` | Probe failed ambiguously | setup/startup fail-closed; health degraded |
+| `unauthenticated` | Explicit auth failure | setup/startup fail; health is degraded |
+| `unknown` | Probe failed for unclear reasons | setup/startup fail; health is degraded |
 
 Classification rules:
 
@@ -86,7 +86,7 @@ Classification rules:
 Status rules:
 
 - `ok` only when Gemini is available, required output formats are supported, auth is configured, and strict read-only enforcement is satisfied (or intentionally relaxed).
-- `degraded` for missing/uncertain auth, missing policy prerequisites, unsupported capability requirements, or other setup uncertainty.
+- `degraded` when auth is missing or uncertain, when policy requirements are missing, when required capabilities are unsupported, or when setup is otherwise uncertain.
 
 Required diagnostics fields:
 
@@ -100,12 +100,12 @@ Required diagnostics fields:
 
 ## 6) Startup and Setup Contract
 
-Startup validation must fail fast when critical requirements are missing:
+Startup validation fails immediately when required conditions are missing:
 
 1. Gemini CLI installed and on `PATH`.
 2. Required output formats supported by installed CLI: `json` and `stream-json`.
 3. Auth is `configured` (not `unknown`).
-4. Strict mode prerequisites pass when strict enforcement is enabled (policy file exists and `--admin-policy` is supported).
+4. When strict mode is enabled, required checks pass (policy file exists and `--admin-policy` is supported).
 
 Setup wizard contract:
 
@@ -121,14 +121,14 @@ Invariants:
 
 1. Prompt payload after `-p/--prompt` is fully redacted.
 2. Positional prompt fragments are redacted.
-3. Unknown flag values are redacted unless explicitly safe-listed.
+3. Unknown flag values are redacted unless explicitly allowlisted.
 4. Credentials/tokens (including API keys and bearer tokens) are sanitized in logs.
 
 ## 8) Tool Output and Chunking Contract
 
 Output shape:
 
-- Tool responses are JSON serialized into MCP text content.
+- Tool responses are returned as JSON in MCP text content.
 - Errors are structured JSON with stable error codes.
 
 Chunking behavior:
@@ -140,7 +140,7 @@ Chunking behavior:
 
 ## 9) Runtime Validation Harness
 
-Manual runtime source of truth:
+Primary manual runtime validation file:
 
 - `tests/manual/mcp-live-smoke.mjs`
 
@@ -154,20 +154,21 @@ Expected behavior:
 - Hard-fail on first failed check.
 - Produce sign-off matrix with PASS/FAIL status.
 
-## 10) Docs Synchronization Rules
+## 10) Change Governance
 
-When changing runtime semantics in any of these areas, update this document in the same change:
+Required updates when changing runtime behavior:
+
+1. `docs/runtime-contract.md`
+2. `docs/project-overview-PRD.md`
+3. `README.md`
+4. `CONTRIBUTING.md`
+
+Areas that require updates:
 
 - CLI argument construction and fallback strategy
 - read-only enforcement and policy behavior
 - auth classification behavior
-- health/status mapping semantics
+- health/status mapping behavior
 - setup wizard and startup validation behavior
 - logging redaction behavior
 - response chunking/continuation behavior
-
-Then reconcile summaries in:
-
-- `docs/project-overview-PRD.md`
-- `README.md`
-- `CONTRIBUTING.md`

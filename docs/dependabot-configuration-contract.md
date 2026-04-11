@@ -3,14 +3,14 @@
 ## Document Status
 
 - **Role**: Canonical specification for Dependabot behavior in this repository
-- **Status**: Living specification (normative)
+- **Status**: Living specification
 - **Audience**: Maintainers and contributors
 - **Canonical config file**: `.github/dependabot.yml`
 - **Last validated**: 2026-04-09 against current `main`
 
 ## Scope and Precedence
 
-This document defines repository policy for Dependabot version updates and security updates.
+This document defines repository behavior for Dependabot version updates and security updates.
 
 Precedence:
 
@@ -21,7 +21,7 @@ If they diverge, update this document to match `.github/dependabot.yml`.
 
 ## 1) Execution Model
 
-Dependabot executes two independent channels:
+Dependabot runs in two independent channels:
 
 1. **Version updates**
    - Scheduled by `.github/dependabot.yml` `updates[].schedule`.
@@ -29,7 +29,7 @@ Dependabot executes two independent channels:
 
 2. **Security updates**
    - Driven by Dependabot alerts/security-update capability.
-   - Can open fix PRs when a non-vulnerable resolution is available.
+   - Can open fix PRs when a non-vulnerable update is available.
 
 ## 2) Current Effective Policy
 
@@ -62,7 +62,7 @@ Policy summary:
 
 - Ecosystems: `npm`, `github-actions`
 - Cadence: monthly, Monday, 06:00 UTC
-- Routine major updates: suppressed
+- Routine major updates: disabled
 - PR caps: npm=5, github-actions=3
 
 ## 3) Config Snippet Reference (Behavioral)
@@ -112,8 +112,8 @@ updates:
 
 Behavior:
 
-- Applies deterministic labels and commit prefixes.
-- Enforces per-ecosystem PR cap.
+- Applies fixed labels and commit prefixes.
+- Enforces per-ecosystem PR limits.
 
 ## C) Grouping model
 
@@ -159,7 +159,7 @@ updates:
 Behavior:
 
 - Prevents routine major-version PR creation in both ecosystems.
-- Leaves major upgrades as explicit maintainer actions.
+- Leaves major upgrades as manual maintainer actions.
 
 ## 4) Operational Sequences
 
@@ -169,13 +169,13 @@ Behavior:
 2. Candidate updates are resolved.
 3. Group/ignore rules are applied.
 4. PRs are opened up to `open-pull-requests-limit`.
-5. Remaining candidates are deferred to future runs.
+5. Remaining candidates are postponed to future runs.
 
 ## Maintainer development sequence
 
 1. Feature and bugfix PRs proceed normally.
 2. Dependabot PRs are reviewed/merged independently.
-3. Lockfile conflicts are resolved by standard merge/rebase flow.
+3. Lockfile conflicts are resolved using standard merge/rebase flow.
 4. Security fix PRs take precedence over non-security maintenance PRs when conflict order matters.
 
 ## 5) Cadence Change Procedure (`monthly` -> `weekly`)
@@ -198,7 +198,7 @@ Procedure:
 Recommended rollout:
 
 1. Switch `npm` first.
-2. Keep `github-actions` monthly unless action-update latency requires weekly cadence.
+2. Keep `github-actions` monthly unless update delay requires weekly checks.
 3. Re-evaluate PR volume after 1-2 cycles.
 
 ## 6) Manual Trigger Procedure
@@ -222,7 +222,7 @@ Result:
 UI path:
 
 1. Repository -> `Security and quality` -> Dependabot Vulnerabilities
-2. Open alert
+2. Open the alert
 3. `Create Dependabot security update` (when available)
 
 Result:
@@ -242,7 +242,7 @@ UI path:
 Contract checks:
 
 1. `.github/dependabot.yml` parses as valid YAML.
-2. Exactly two ecosystem blocks: `npm`, `github-actions`.
+2. Exactly two ecosystem entries: `npm`, `github-actions`.
 3. Each block includes schedule, grouping (where defined), major-ignore policy, PR limit.
 4. `.github/dependabot.yml` is tracked (not hidden by ignore rules).
 
@@ -254,9 +254,9 @@ Last validation status:
 
 ## 8) Change Governance
 
-Required same-change updates for policy changes:
+Required updates when changing Dependabot configuration:
 
-1. `.github/dependabot.yml`
+1. [`.github/dependabot.yml`](../.github/dependabot.yml)
 2. `docs/dependabot-configuration-contract.md`
 
 Optional companion updates:
