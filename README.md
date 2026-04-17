@@ -112,6 +112,10 @@ npx gemini-researcher init
 }
 ```
 
+> [!NOTE]
+> On native Windows, some MCP hosts use shell-less process spawning and may not resolve npm command shims reliably (`npx`, `gemini`).
+> If startup fails with launch errors (`spawn ... ENOENT` / `GEMINI_CLI_LAUNCH_FAILED` despite working in PowerShell), prefer Docker or WSL for immediate reliability.
+
 <details>
 <summary>VS Code</summary>
 
@@ -350,10 +354,12 @@ For MCP client configuration with Docker:
 
 ## Troubleshooting (common issues)
 - `GEMINI_CLI_NOT_FOUND`: Install Gemini CLI: `npm install -g @google/gemini-cli`
+- `GEMINI_CLI_LAUNCH_FAILED`: This is a launch-path issue, not an auth/capability issue. On Windows, command shims can fail in shell-less spawn contexts. Validate `gemini --help` and `npx --version` interactively, then prefer Docker or WSL if host launch mode is strict.
 - `AUTH_MISSING`: Run `gemini`, and authenticate or set `GEMINI_API_KEY`
-- `AUTH_UNKNOWN`: Auth could not be confirmed (often network/CLI probe failure). Verify `gemini` works interactively, then retry.
+- `AUTH_UNKNOWN`: Auth could not be confirmed (often network/CLI probe failure). If launch errors are present, fix launch-path first; otherwise verify `gemini` works interactively, then retry.
 - `ADMIN_POLICY_MISSING`: Reinstall package or verify `policies/read-only-enforcement.toml` exists in installed package.
 - `ADMIN_POLICY_UNSUPPORTED`: Upgrade Gemini CLI to v0.36.0+ (`gemini --help` should include `--admin-policy`).
+- Capability errors (`ADMIN_POLICY_UNSUPPORTED`, output format unsupported) should be interpreted only after a successful `gemini --help` probe. If probe launch fails, treat it as launch-path failure first.
 - `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0`: Disables strict startup policy checks. This reduces safety guarantees.
 - `.gitignore` blocking files: Gemini respects `.gitignore` by default; toggle `fileFiltering.respectGitIgnore` in `gemini /settings` if you intentionally want ignored files included (note: this changes Gemini behavior globally)
 - `PATH_NOT_ALLOWED`: All `@path` references must resolve inside the configured project root (`process.cwd()` by default). Use `validate_paths` to pre-check paths.

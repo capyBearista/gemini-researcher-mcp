@@ -15,8 +15,7 @@ import {
   checkGeminiAuth,
   hasReadOnlyPolicyFile,
   isAdminPolicyEnforced,
-  supportsAdminPolicyFlag,
-  supportsRequiredOutputFormats,
+  getGeminiCliCapabilityChecks,
   getProjectRoot,
   Logger,
 } from "../utils/index.js";
@@ -83,15 +82,26 @@ export const healthCheckTool: UnifiedTool = {
       let authConfigured = false;
       let authStatus: "configured" | "unauthenticated" | "unknown" = "unknown";
       let authMethod: string | undefined;
+      let authLaunchFailed = false;
       const enforceAdminPolicy = isAdminPolicyEnforced();
       const policyFilePresent = hasReadOnlyPolicyFile();
-      const adminPolicySupported = geminiOnPath && enforceAdminPolicy ? await supportsAdminPolicyFlag() : true;
-      const requiredOutputFormatsSupported = geminiOnPath ? await supportsRequiredOutputFormats() : false;
-      if (geminiOnPath) {
+      const capabilityChecks = geminiOnPath
+        ? await getGeminiCliCapabilityChecks()
+        : {
+            probeSucceeded: false,
+            launchFailed: false,
+            hasAdminPolicyFlag: false,
+            supportsRequiredOutputFormats: false,
+            outputFormatChoices: [],
+          };
+      const adminPolicySupported = enforceAdminPolicy ? capabilityChecks.hasAdminPolicyFlag : true;
+      const requiredOutputFormatsSupported = capabilityChecks.supportsRequiredOutputFormats;
+      if (geminiOnPath && capabilityChecks.probeSucceeded) {
         const auth = await checkGeminiAuth();
         authConfigured = auth.configured;
         authStatus = auth.status;
         authMethod = auth.method;
+        authLaunchFailed = auth.launchFailed ?? false;
       }
 
       // Collect warnings for any issues
@@ -102,16 +112,27 @@ export const healthCheckTool: UnifiedTool = {
       if (geminiOnPath && authStatus === "unauthenticated") {
         warnings.push("Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google'.");
       }
-      if (geminiOnPath && authStatus === "unknown") {
+      if (geminiOnPath && capabilityChecks.probeSucceeded && authStatus === "unknown") {
         warnings.push("Gemini CLI authentication status is unknown due to ambiguous probe failure.");
+      }
+      if (geminiOnPath && capabilityChecks.probeSucceeded && authLaunchFailed) {
+        warnings.push("Gemini CLI auth probe failed due to launch-path issues. Resolve command launching before auth validation.");
       }
       if (enforceAdminPolicy && !policyFilePresent) {
         warnings.push("Read-only admin policy file missing. Expected: policies/read-only-enforcement.toml");
       }
-      if (enforceAdminPolicy && geminiOnPath && !adminPolicySupported) {
+      if (geminiOnPath && !capabilityChecks.probeSucceeded && capabilityChecks.launchFailed) {
+        warnings.push(
+          "Gemini CLI launch probe failed before capability checks. Verify command launching on this platform and run 'gemini --help' manually."
+        );
+      }
+      if (geminiOnPath && !capabilityChecks.probeSucceeded && !capabilityChecks.launchFailed) {
+        warnings.push("Gemini CLI capability probe failed before validation. Retry diagnostics after verifying CLI/network health.");
+      }
+      if (enforceAdminPolicy && geminiOnPath && capabilityChecks.probeSucceeded && !adminPolicySupported) {
         warnings.push("Gemini CLI does not support --admin-policy. Upgrade to v0.36.0 or newer.");
       }
-      if (geminiOnPath && !requiredOutputFormatsSupported) {
+      if (geminiOnPath && capabilityChecks.probeSucceeded && !requiredOutputFormatsSupported) {
         warnings.push("Gemini CLI does not support required output formats (json, stream-json). Upgrade to v0.36.0 or newer.");
       }
       if (!enforceAdminPolicy) {
@@ -133,6 +154,7 @@ export const healthCheckTool: UnifiedTool = {
       // Determine overall status
       const status: HealthCheckResponse["status"] =
         geminiOnPath &&
+        capabilityChecks.probeSucceeded &&
         requiredOutputFormatsSupported &&
         authConfigured &&
         (!enforceAdminPolicy || (policyFilePresent && adminPolicySupported))

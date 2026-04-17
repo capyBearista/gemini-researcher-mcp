@@ -7,7 +7,12 @@
 
 import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES, MODELS } from "../constants.js";
 import { Logger } from "./logger.js";
-import { executeCommand, commandExists, getCommandVersion } from "./commandExecutor.js";
+import {
+  executeCommand,
+  commandExists,
+  getCommandVersion,
+  isCommandLaunchErrorMessage,
+} from "./commandExecutor.js";
 import type { ProgressCallback } from "../types.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -59,9 +64,21 @@ const AUTH_ERROR_HINTS = ["auth", "login", "credential", "unauthenticated", "per
 
 export type AuthStatus = "configured" | "unauthenticated" | "unknown";
 
-interface GeminiCliCapabilities {
+export interface GeminiAuthCheckResult {
+  configured: boolean;
+  status: AuthStatus;
+  method?: "api_key" | "google_login" | "vertex_ai";
+  reason?: string;
+  launchFailed?: boolean;
+}
+
+export interface GeminiCliCapabilityChecks {
+  probeSucceeded: boolean;
+  launchFailed: boolean;
   hasAdminPolicyFlag: boolean;
+  supportsRequiredOutputFormats: boolean;
   outputFormatChoices: string[];
+  reason?: string;
 }
 
 type ExecuteCommandFn = typeof executeCommand;
@@ -125,7 +142,7 @@ function extractOutputFormatChoices(helpText: string): string[] {
     .filter((choice) => choice.length > 0);
 }
 
-async function getGeminiCliCapabilities(deps?: GeminiExecutorDeps): Promise<GeminiCliCapabilities | null> {
+export async function getGeminiCliCapabilityChecks(deps?: GeminiExecutorDeps): Promise<GeminiCliCapabilityChecks> {
   const runCommand = deps?.executeCommandFn ?? executeCommand;
 
   try {
@@ -133,28 +150,39 @@ async function getGeminiCliCapabilities(deps?: GeminiExecutorDeps): Promise<Gemi
       timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
     });
 
+    const hasAdminPolicyFlag = helpText.includes(CLI.FLAGS.ADMIN_POLICY);
+    const outputFormatChoices = extractOutputFormatChoices(helpText);
+    const available = new Set(outputFormatChoices.map((choice) => choice.toLowerCase()));
+    const supportsRequiredOutputFormats = REQUIRED_OUTPUT_FORMATS.every((requiredFormat) => available.has(requiredFormat));
+
     return {
-      hasAdminPolicyFlag: helpText.includes(CLI.FLAGS.ADMIN_POLICY),
-      outputFormatChoices: extractOutputFormatChoices(helpText),
+      probeSucceeded: true,
+      launchFailed: false,
+      hasAdminPolicyFlag,
+      supportsRequiredOutputFormats,
+      outputFormatChoices,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      probeSucceeded: false,
+      launchFailed: isCommandLaunchErrorMessage(reason),
+      hasAdminPolicyFlag: false,
+      supportsRequiredOutputFormats: false,
+      outputFormatChoices: [],
+      reason,
+    };
   }
 }
 
 export async function supportsAdminPolicyFlag(deps?: GeminiExecutorDeps): Promise<boolean> {
-  const capabilities = await getGeminiCliCapabilities(deps);
-  return capabilities?.hasAdminPolicyFlag ?? false;
+  const checks = await getGeminiCliCapabilityChecks(deps);
+  return checks.probeSucceeded ? checks.hasAdminPolicyFlag : false;
 }
 
 export async function supportsRequiredOutputFormats(deps?: GeminiExecutorDeps): Promise<boolean> {
-  const capabilities = await getGeminiCliCapabilities(deps);
-  if (!capabilities) {
-    return false;
-  }
-
-  const available = new Set(capabilities.outputFormatChoices.map((choice) => choice.toLowerCase()));
-  return REQUIRED_OUTPUT_FORMATS.every((requiredFormat) => available.has(requiredFormat));
+  const checks = await getGeminiCliCapabilityChecks(deps);
+  return checks.probeSucceeded ? checks.supportsRequiredOutputFormats : false;
 }
 
 // ============================================================================
@@ -436,6 +464,7 @@ export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
   status: AuthStatus;
   method?: "api_key" | "google_login" | "vertex_ai";
   reason?: string;
+  launchFailed?: boolean;
 }> {
   const runCommand = deps?.executeCommandFn ?? executeCommand;
   // Check for API key
@@ -474,13 +503,19 @@ export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
+    const launchFailed = isCommandLaunchErrorMessage(message);
+
+    if (launchFailed) {
+      return { configured: false, status: "unknown", reason: message, launchFailed: true };
+    }
+
     const isAuthFailure = isAuthRelatedErrorMessage(message);
 
     if (isAuthFailure) {
       return { configured: false, status: "unauthenticated", reason: message };
     }
 
-    return { configured: false, status: "unknown", reason: message };
+    return { configured: false, status: "unknown", reason: message, launchFailed };
   }
 }
 
@@ -511,7 +546,9 @@ export async function validateGeminiSetup(): Promise<{
   // Check auth
   const auth = installed ? await checkGeminiAuth() : { configured: false, status: "unknown" as AuthStatus };
   if (installed && !auth.configured) {
-    if (auth.status === "unknown") {
+    if (auth.status === "unknown" && auth.launchFailed) {
+      errors.push(ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED);
+    } else if (auth.status === "unknown") {
       errors.push(ERROR_MESSAGES.AUTH_UNKNOWN);
     } else {
       errors.push(ERROR_MESSAGES.AUTH_MISSING);

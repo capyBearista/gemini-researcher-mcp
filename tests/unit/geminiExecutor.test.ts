@@ -10,6 +10,7 @@ import {
   isAdminPolicyEnforced,
   getReadOnlyPolicyPath,
   isAuthRelatedErrorMessage,
+  getGeminiCliCapabilityChecks,
   supportsRequiredOutputFormats,
 } from "../../src/utils/geminiExecutor.js";
 import { MODELS } from "../../src/constants.js";
@@ -273,6 +274,20 @@ describe("checkGeminiAuth behavior", () => {
     assert.strictEqual(auth.status, "unknown");
     assert.ok(typeof auth.reason === "string");
   });
+
+  it("marks launch-path failures as unknown with launchFailed=true", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error(
+        "Command launch failed for 'gemini': Failed to spawn command 'gemini': spawn gemini ENOENT. Attempted commands: direct:gemini"
+      );
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+
+    assert.strictEqual(auth.configured, false);
+    assert.strictEqual(auth.status, "unknown");
+    assert.strictEqual(auth.launchFailed, true);
+  });
 });
 
 describe("auth error classifier", () => {
@@ -304,6 +319,34 @@ Options:
     const mockExecuteCommand: ExecuteCommandMock = async () => mockHelp;
     const supported = await supportsRequiredOutputFormats({ executeCommandFn: mockExecuteCommand });
     assert.strictEqual(supported, false);
+  });
+
+  it("reports launch-first probe diagnostics when help command cannot be spawned", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error(
+        "Command launch failed for 'gemini': Failed to spawn command 'gemini': spawn gemini ENOENT. Attempted commands: direct:gemini"
+      );
+    };
+
+    const checks = await getGeminiCliCapabilityChecks({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(checks.probeSucceeded, false);
+    assert.strictEqual(checks.launchFailed, true);
+    assert.strictEqual(checks.hasAdminPolicyFlag, false);
+    assert.strictEqual(checks.supportsRequiredOutputFormats, false);
+    assert.ok(checks.reason?.includes("Command launch failed"));
+  });
+
+  it("marks probe as failed (not unsupported) when help command fails ambiguously", async () => {
+    const mockExecuteCommand: ExecuteCommandMock = async () => {
+      throw new Error("Temporary network failure");
+    };
+
+    const checks = await getGeminiCliCapabilityChecks({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(checks.probeSucceeded, false);
+    assert.strictEqual(checks.launchFailed, false);
+    assert.strictEqual(checks.hasAdminPolicyFlag, false);
+    assert.strictEqual(checks.supportsRequiredOutputFormats, false);
+    assert.ok(checks.reason?.includes("Temporary network failure"));
   });
 });
 

@@ -216,6 +216,11 @@ When changing CLI integration, setup, diagnostics, or logging, preserve these in
    - `gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] -p "<prompt>"`
    - No server-generated `-y` or `--yolo`.
 
+1.1 **Cross-platform launch contract**
+   - Launcher must handle Windows shell-less spawn semantics.
+   - Required fallback order on win32 launch failures: direct -> `.cmd` shim -> `cmd /d /s /c`.
+   - Launch failures must be classified before capability/auth failures.
+
 2. **Auth classification**
    - `configured`: auth confirmed.
    - `unauthenticated`: explicit auth failure.

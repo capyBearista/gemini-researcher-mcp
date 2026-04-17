@@ -31,6 +31,19 @@ Required rules:
 4. `-p "<prompt>"` is used for non-interactive headless execution.
 5. `-y` and `--yolo` are never used in server-generated argv.
 
+### 1.1 Cross-platform launch behavior
+
+The command launcher must be robust across Linux/macOS/Windows, including shell-less spawn contexts.
+
+Required launch strategy:
+
+1. Attempt direct command launch with shell disabled.
+2. On Windows launch-path spawn failures (`ENOENT`/`EINVAL`), retry with `.cmd` shim when applicable.
+3. If still failing on Windows, retry through `cmd /d /s /c <command ...>`.
+4. If all launch attempts fail, classify and report as launch failure (not capability/auth).
+
+This behavior applies to runtime execution, setup wizard checks, and startup validation probes.
+
 ## 2) Model Selection and Fallback
 
 Model selection is server-owned and tool-specific.
@@ -78,6 +91,17 @@ Classification rules:
 
 - Auth-related errors are matched by keywords such as `auth`, `login`, `credential`, `unauthenticated`, and `permission denied`.
 - Ambiguous failures are never treated as configured.
+- Launch-path failures must be identified before auth classification when probe output indicates command spawn failure.
+
+## 4.1 Classification precedence
+
+When startup/setup/health probes fail, diagnostics must use this precedence:
+
+1. **Launch failure** (command could not be started; e.g., `ENOENT`, `EINVAL`) 
+2. **Capability failure** (probe succeeded but required flags/formats missing)
+3. **Auth failure** (`unauthenticated` or `unknown` after successful launchability/capability probing)
+
+Capability errors must not be emitted when capability probes never launched successfully.
 
 ## 5) Health Check Contract
 
@@ -87,6 +111,7 @@ Status rules:
 
 - `ok` only when Gemini is available, required output formats are supported, auth is configured, and strict read-only enforcement is satisfied (or intentionally relaxed).
 - `degraded` when auth is missing or uncertain, when policy requirements are missing, when required capabilities are unsupported, or when setup is otherwise uncertain.
+- `degraded` with launch-specific warnings when command launch probes fail before capability/auth checks.
 
 Required diagnostics fields:
 

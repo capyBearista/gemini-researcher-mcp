@@ -17,6 +17,7 @@ import {
   chunkResponse,
   needsChunking,
   cacheResponse,
+  isCommandLaunchErrorMessage,
   isAuthRelatedErrorMessage,
   Logger,
 } from "../utils/index.js";
@@ -171,7 +172,10 @@ export const quickQueryTool: UnifiedTool = {
       let code: ErrorCode = ERROR_CODES.GEMINI_CLI_ERROR;
       let nextStep = "Check server logs for details";
 
-      if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
+      if (isCommandLaunchErrorMessage(errorMessage)) {
+        code = ERROR_CODES.GEMINI_CLI_LAUNCH_FAILED;
+        nextStep = ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED;
+      } else if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
         code = ERROR_CODES.GEMINI_CLI_NOT_FOUND;
         nextStep = "Install Gemini CLI: npm install -g @google/gemini-cli, or run setup wizard: npx gemini-researcher init";
       } else if (isAuthRelatedErrorMessage(errorMessage)) {

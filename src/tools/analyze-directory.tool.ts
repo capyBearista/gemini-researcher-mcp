@@ -9,13 +9,14 @@ import * as path from "path";
 import { z } from "zod";
 import type { UnifiedTool } from "./registry.js";
 import type { AnalyzeDirectoryArgs } from "../types.js";
-import { ERROR_CODES, DEFAULTS } from "../constants.js";
+import { ERROR_CODES, DEFAULTS, ERROR_MESSAGES } from "../constants.js";
 import type { ErrorCode } from "../constants.js";
 import {
   executeGeminiCLI,
   getProjectRoot,
   isWithinProjectRoot,
   enumerateDirectory,
+  isCommandLaunchErrorMessage,
   isAuthRelatedErrorMessage,
   Logger,
 } from "../utils/index.js";
@@ -228,7 +229,10 @@ For each file, output:
       let code: ErrorCode = ERROR_CODES.GEMINI_CLI_ERROR;
       let nextStep = "Check server logs for details";
 
-      if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
+      if (isCommandLaunchErrorMessage(errorMessage)) {
+        code = ERROR_CODES.GEMINI_CLI_LAUNCH_FAILED;
+        nextStep = ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED;
+      } else if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
         code = ERROR_CODES.GEMINI_CLI_NOT_FOUND;
         nextStep = "Install Gemini CLI: npm install -g @google/gemini-cli, or run setup wizard: npx gemini-researcher init";
       } else if (isAuthRelatedErrorMessage(errorMessage)) {

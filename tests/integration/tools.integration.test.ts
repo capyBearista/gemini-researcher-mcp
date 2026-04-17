@@ -305,7 +305,10 @@ describe("Tool Integration Tests", () => {
 
       const parsed = JSON.parse(result);
       assert.ok(parsed.error, "Should return an error when Gemini CLI is unavailable in tests");
-      assert.strictEqual(parsed.error.code, "GEMINI_CLI_NOT_FOUND");
+      assert.ok(
+        ["GEMINI_CLI_NOT_FOUND", "GEMINI_CLI_LAUNCH_FAILED"].includes(parsed.error.code),
+        "Expected missing or launch failure error code"
+      );
     });
   });
 
@@ -381,6 +384,7 @@ describe("Tool Integration Tests", () => {
         "INVALID_ARGUMENT",
         "PATH_NOT_ALLOWED",
         "GEMINI_CLI_NOT_FOUND",
+        "GEMINI_CLI_LAUNCH_FAILED",
         "GEMINI_CLI_ERROR",
         "AUTH_MISSING",
         "QUOTA_EXCEEDED",

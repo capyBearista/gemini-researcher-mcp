@@ -10,6 +10,7 @@ export {
   executeCommand,
   commandExists,
   getCommandVersion,
+  isCommandLaunchErrorMessage,
 } from "./commandExecutor.js";
 
 // Gemini CLI execution
@@ -24,10 +25,12 @@ export {
   isAdminPolicyEnforced,
   supportsAdminPolicyFlag,
   supportsRequiredOutputFormats,
+  getGeminiCliCapabilityChecks,
   isAuthRelatedErrorMessage,
   type AuthStatus,
   type GeminiResponse,
   type ToolName,
+  type GeminiCliCapabilityChecks,
 } from "./geminiExecutor.js";
 
 // Path validation

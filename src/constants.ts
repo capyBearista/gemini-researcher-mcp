@@ -20,6 +20,8 @@ export const ERROR_CODES = {
   PATH_NOT_ALLOWED: "PATH_NOT_ALLOWED",
   /** gemini binary not on PATH */
   GEMINI_CLI_NOT_FOUND: "GEMINI_CLI_NOT_FOUND",
+  /** gemini binary exists but runtime could not launch it */
+  GEMINI_CLI_LAUNCH_FAILED: "GEMINI_CLI_LAUNCH_FAILED",
   /** Gemini CLI execution failed */
   GEMINI_CLI_ERROR: "GEMINI_CLI_ERROR",
   /** Gemini CLI authentication not configured */
@@ -46,6 +48,8 @@ export const ERROR_MESSAGES = {
   TOOL_NOT_FOUND: "not found in registry",
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@src/auth.ts explain what this does') or ask general questions",
   GEMINI_CLI_NOT_FOUND: "Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli",
+  GEMINI_CLI_LAUNCH_FAILED:
+    "Gemini CLI could not be launched in this runtime context. On Windows this is often command-shim resolution; verify command launch and consider Docker/WSL fallback.",
   AUTH_MISSING: "Gemini CLI authentication not configured. Run 'gemini' and select 'Login with Google', or set GEMINI_API_KEY environment variable.",
   AUTH_UNKNOWN:
     "Gemini CLI authentication could not be confirmed due to an ambiguous probe failure. Check network/CLI health and run 'gemini' to verify login.",
@@ -316,6 +320,7 @@ Please fix the issues above and run 'npx gemini-researcher init' again.
 → Run 'npx gemini-researcher init' for guided setup`,
   STARTUP_AUTH_UNKNOWN: `❌ Gemini CLI authentication status is unknown
 → Authentication could not be confirmed due to an ambiguous probe failure
+→ If errors mention command launch failures, resolve launch-path first (especially on native Windows)
 → Verify network and CLI health, then run 'gemini' and ensure login succeeds
 → Retry startup or run 'npx gemini-researcher init' for guided setup`,
   STARTUP_ADMIN_POLICY_MISSING: `❌ Gemini Researcher read-only policy missing
@@ -326,6 +331,14 @@ Please fix the issues above and run 'npx gemini-researcher init' again.
 → Upgrade Gemini CLI to v0.36.0 or newer
 → Current command: gemini --help
 → Run 'npx gemini-researcher init' after upgrade`,
+  STARTUP_GEMINI_LAUNCH_FAILED: (reason: string) => `❌ Gemini CLI could not be launched for capability checks
+→ Root cause: ${reason}
+→ This is a command launch problem (not auth/version by default)
+→ On Windows, ensure npm shims are launchable in non-shell contexts or use Docker/WSL fallback`,
+  STARTUP_GEMINI_PROBE_FAILED: (reason: string) => `❌ Gemini CLI capability probe failed before validation could complete
+→ Probe failure: ${reason}
+→ Validate CLI/network health with: gemini --help
+→ Retry startup or run 'npx gemini-researcher init' for guided setup`,
   STARTUP_OUTPUT_FORMAT_UNSUPPORTED: `❌ Gemini CLI does not support required output formats
 → Required: --output-format json and --output-format stream-json
 → Verify with: gemini --help

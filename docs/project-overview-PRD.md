@@ -152,6 +152,7 @@ When this PRD and runtime mechanics diverge, `docs/runtime-contract.md` is autho
 3. Health status must degrade on uncertainty rather than over-report success.
 4. Long-running analysis must provide keepalive/progress behavior to prevent client timeouts.
 5. Structured error payloads must remain consistent and machine-readable.
+6. Runtime probes must classify launch-path failures before capability/auth failures, especially for native Windows shell-less spawn environments.
 
 ## 9) Setup and First-Run Experience
 
@@ -179,6 +180,12 @@ If checks fail, output must provide actionable remediation guidance.
 
 - Docker distribution is shipped and documented.
 - Multi-platform image support is included.
+
+### 10.3 Native Windows reliability
+
+- Native Windows operation is a first-class target.
+- Runtime command launching must handle Windows npm shim behavior robustly.
+- Documentation must provide a clear fallback path (Docker/WSL) when host MCP launch semantics are incompatible.
 
 ## 11) Success Metrics
 

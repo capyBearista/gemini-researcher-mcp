@@ -4,17 +4,18 @@
  * and configuring Gemini CLI authentication.
  */
 
-import { spawn } from "child_process";
 import { WIZARD_MESSAGES, CLI, ERROR_MESSAGES } from "../constants.js";
 import {
   checkGeminiAuth,
+  type GeminiAuthCheckResult,
+  type GeminiCliCapabilityChecks,
+  getGeminiCliCapabilityChecks,
   getReadOnlyPolicyPath,
   hasReadOnlyPolicyFile,
   isAuthRelatedErrorMessage,
   isAdminPolicyEnforced,
-  supportsAdminPolicyFlag,
-  supportsRequiredOutputFormats,
 } from "../utils/geminiExecutor.js";
+import { executeCommand, getCommandVersion, isCommandLaunchErrorMessage } from "../utils/commandExecutor.js";
 
 // ============================================================================
 // Types
@@ -26,6 +27,7 @@ export interface ValidationResult {
   details?: Record<string, unknown>;
   isAuthError?: boolean;
   isAuthUnknown?: boolean;
+  isLaunchError?: boolean;
 }
 
 export interface GeminiInstallCheck {
@@ -34,67 +36,25 @@ export interface GeminiInstallCheck {
   version: string | null;
 }
 
+interface ValidateEnvironmentDeps {
+  isAdminPolicyEnforcedFn?: () => boolean;
+  hasReadOnlyPolicyFileFn?: () => boolean;
+  checkGeminiInstallationFn?: () => Promise<GeminiInstallCheck>;
+  getGeminiCliCapabilityChecksFn?: () => Promise<GeminiCliCapabilityChecks>;
+  checkGeminiAuthFn?: () => Promise<GeminiAuthCheckResult>;
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
 /**
- * Execute a command and return stdout with timeout support
- */
-async function runCommand(command: string, args: string[], timeoutMs: number = 60000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const childProcess = spawn(command, args, {
-      env: process.env,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-
-    // Set up timeout to kill process if it hangs
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      childProcess.kill();
-      reject(new Error(`Command timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    childProcess.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    childProcess.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    childProcess.on("error", (error: Error) => {
-      clearTimeout(timeout);
-      reject(new Error(`Failed to spawn '${command}': ${error.message}`));
-    });
-
-    childProcess.on("close", (code: number | null) => {
-      clearTimeout(timeout);
-      if (timedOut) {
-        return; // Already rejected by timeout
-      }
-      if (code === 0) {
-        resolve(stdout.trim());
-      } else {
-        reject(new Error(stderr.trim() || `Command failed with exit code ${code}`));
-      }
-    });
-  });
-}
-
-/**
  * Get the path to the gemini binary
  */
 async function getGeminiPath(): Promise<string | null> {
-  const whichCommand = process.platform === "win32" ? CLI.COMMANDS.WHERE : CLI.COMMANDS.WHICH;
   try {
-    const result = await runCommand(whichCommand, [CLI.COMMANDS.GEMINI]);
-    // 'which' may return multiple lines on some systems, get the first one
+    const checkCommand = process.platform === "win32" ? CLI.COMMANDS.WHERE : CLI.COMMANDS.WHICH;
+    const result = await executeCommand(checkCommand, [CLI.COMMANDS.GEMINI]);
     return result.split("\n")[0].trim();
   } catch {
     return null;
@@ -105,14 +65,7 @@ async function getGeminiPath(): Promise<string | null> {
  * Get the version of the gemini CLI
  */
 async function getGeminiVersion(): Promise<string | null> {
-  try {
-    const output = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.VERSION]);
-    // Try to extract version number pattern (e.g., "1.2.3")
-    const versionMatch = output.match(/(\d+\.\d+\.\d+)/);
-    return versionMatch ? versionMatch[1] : output.split("\n")[0].trim();
-  } catch {
-    return null;
-  }
+  return getCommandVersion(CLI.COMMANDS.GEMINI);
 }
 
 // ============================================================================
@@ -170,6 +123,14 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
   }
 
   if (!auth.configured && auth.status === "unknown") {
+    if (auth.launchFailed) {
+      return {
+        success: false,
+        message: ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED,
+        isLaunchError: true,
+      };
+    }
+
     return {
       success: false,
       message: ERROR_MESSAGES.AUTH_UNKNOWN,
@@ -193,7 +154,7 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
       args.splice(args.length - 2, 0, CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
     }
 
-    const output = await runCommand(CLI.COMMANDS.GEMINI, args, 120000); // 2 minutes timeout
+    const output = await executeCommand(CLI.COMMANDS.GEMINI, args, undefined, { timeoutMs: 120000 });
 
     // Try to parse JSON output to verify it's working correctly
     try {
@@ -208,16 +169,18 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const isLaunchError = isCommandLaunchErrorMessage(errorMessage);
 
     // Check if error is likely auth-related
-    const isAuthError = isAuthRelatedErrorMessage(errorMessage);
-    const isAuthUnknown = !isAuthError;
+    const isAuthError = !isLaunchError && isAuthRelatedErrorMessage(errorMessage);
+    const isAuthUnknown = !isAuthError && !isLaunchError;
 
     return {
       success: false,
       message: errorMessage,
       isAuthError,
       isAuthUnknown,
+      isLaunchError,
     };
   }
 }
@@ -271,6 +234,11 @@ export async function runSetupWizard(): Promise<boolean> {
         console.log(WIZARD_MESSAGES.AUTH_NOT_FOUND);
       }
 
+      if (testResult.isLaunchError) {
+        console.log("");
+        console.log(ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED);
+      }
+
       if (testResult.isAuthUnknown) {
         console.log("");
         console.log(ERROR_MESSAGES.AUTH_UNKNOWN);
@@ -299,11 +267,12 @@ export async function runSetupWizard(): Promise<boolean> {
  * Validate environment at startup (quick validation, no user interaction)
  * Returns true if environment is valid, false otherwise
  */
-export async function validateEnvironment(): Promise<{ valid: boolean; error?: string }> {
-  const enforceAdminPolicy = isAdminPolicyEnforced();
+export async function validateEnvironment(deps?: ValidateEnvironmentDeps): Promise<{ valid: boolean; error?: string }> {
+  const enforceAdminPolicy = deps?.isAdminPolicyEnforcedFn?.() ?? isAdminPolicyEnforced();
 
   // Check Gemini CLI installation
-  const installCheck = await checkGeminiInstallation();
+  const checkGeminiInstallationFn = deps?.checkGeminiInstallationFn ?? checkGeminiInstallation;
+  const installCheck = await checkGeminiInstallationFn();
 
   if (!installCheck.installed) {
     return {
@@ -317,16 +286,32 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
   }
 
   // Verify read-only admin policy file is available
-  if (enforceAdminPolicy && !hasReadOnlyPolicyFile()) {
+  const hasReadOnlyPolicyFileFn = deps?.hasReadOnlyPolicyFileFn ?? hasReadOnlyPolicyFile;
+  if (enforceAdminPolicy && !hasReadOnlyPolicyFileFn()) {
     return {
       valid: false,
       error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_MISSING,
     };
   }
 
+  const getGeminiCliCapabilityChecksFn = deps?.getGeminiCliCapabilityChecksFn ?? getGeminiCliCapabilityChecks;
+  const capabilityChecks = await getGeminiCliCapabilityChecksFn();
+  if (!capabilityChecks.probeSucceeded) {
+    if (capabilityChecks.launchFailed) {
+      return {
+        valid: false,
+        error: WIZARD_MESSAGES.STARTUP_GEMINI_LAUNCH_FAILED(capabilityChecks.reason || "Unknown launch failure"),
+      };
+    }
+
+    return {
+      valid: false,
+      error: WIZARD_MESSAGES.STARTUP_GEMINI_PROBE_FAILED(capabilityChecks.reason || "Unknown probe failure"),
+    };
+  }
+
   // Verify Gemini CLI supports --admin-policy (v0.36+)
-  const hasAdminPolicySupport = enforceAdminPolicy ? await supportsAdminPolicyFlag() : true;
-  if (enforceAdminPolicy && !hasAdminPolicySupport) {
+  if (enforceAdminPolicy && !capabilityChecks.hasAdminPolicyFlag) {
     return {
       valid: false,
       error: WIZARD_MESSAGES.STARTUP_ADMIN_POLICY_UNSUPPORTED,
@@ -334,8 +319,7 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
   }
 
   // Verify Gemini CLI supports required output formats (json + stream-json)
-  const hasRequiredOutputFormats = await supportsRequiredOutputFormats();
-  if (!hasRequiredOutputFormats) {
+  if (!capabilityChecks.supportsRequiredOutputFormats) {
     return {
       valid: false,
       error: WIZARD_MESSAGES.STARTUP_OUTPUT_FORMAT_UNSUPPORTED,
@@ -343,7 +327,8 @@ export async function validateEnvironment(): Promise<{ valid: boolean; error?: s
   }
 
   // Check authentication (strict, fail-closed for unknown)
-  const auth = await checkGeminiAuth();
+  const checkGeminiAuthFn = deps?.checkGeminiAuthFn ?? checkGeminiAuth;
+  const auth = await checkGeminiAuthFn();
   if (!auth.configured && auth.status === "unauthenticated") {
     return {
       valid: false,
