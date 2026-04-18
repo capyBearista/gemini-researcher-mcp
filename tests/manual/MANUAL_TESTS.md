@@ -140,9 +140,10 @@ This requires triggering quota errors, which may require high usage or API key w
 
 | Test | Steps | Expected Result | ✓/✗ |
 |------|-------|-----------------|-----|
-| Tier 1 → Tier 2 | Trigger quota on gemini-3-flash | Falls back to gemini-2.5-flash | |
-| Tier 2 → Tier 3 | Trigger quota on tier 2 | Falls back to auto-select | |
-| All tiers exhausted | Exhaust all quotas | Returns QUOTA_EXCEEDED error | |
+| flash → flash_lite | Trigger quota on gemini-3-flash-preview | Falls back to gemini-2.5-flash-lite | |
+| flash_lite → auto | Trigger quota on gemini-2.5-flash-lite | Falls back to auto-select | |
+| deep chain progression | Trigger repeated quota for deep_research | pro -> flash -> flash_lite -> auto | |
+| all options exhausted | Exhaust all fallback options | Returns QUOTA_EXCEEDED error | |
 
 **Note:** Fallback can be simulated by temporarily modifying constants to use invalid model names.
 

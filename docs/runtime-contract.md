@@ -55,15 +55,25 @@ This behavior applies to runtime execution, setup wizard checks, and startup val
 
 Model selection is server-owned and tool-specific.
 
-| Tool | Tier 1 | Tier 2 | Tier 3 |
-|---|---|---|---|
-| `quick_query` | `gemini-3-flash-preview` | `gemini-2.5-flash` | auto-select (omit `-m`) |
-| `deep_research` | `gemini-3-pro-preview` | `gemini-2.5-pro` | auto-select (omit `-m`) |
-| `analyze_directory` | `gemini-3-flash-preview` | `gemini-2.5-flash` | auto-select (omit `-m`) |
+### 2.1 Family-aware fallback chains
 
-When fallback happens:
+| Tool | Fallback chain |
+|---|---|
+| `quick_query` | `flash -> flash_lite -> auto` |
+| `deep_research` | `pro -> flash -> flash_lite -> auto` |
+| `analyze_directory` | `flash -> flash_lite -> auto` |
 
-- Retry to the next tier only for quota or capacity failures.
+Canonical model mapping used by those families:
+
+- `pro`: `gemini-3-pro-preview`
+- `flash`: `gemini-3-flash-preview`
+- `flash_lite`: `gemini-2.5-flash-lite`
+- `auto`: omit `-m` and allow Gemini CLI auto-selection
+
+### 2.2 Fallback trigger rules
+
+- Retry to the next fallback entry for quota/capacity failures.
+- For API-key authentication only, retry to the next fallback entry when the selected model is unavailable/unsupported for that key.
 - For other failures, stop immediately and return structured errors.
 
 ## 3) Read-Only Enforcement

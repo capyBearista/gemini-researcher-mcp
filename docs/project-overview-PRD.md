@@ -129,6 +129,7 @@ This PRD defines product-level requirements. Runtime-level behavior is defined i
 Runtime-level items include:
 
 - Gemini argv contract and approval semantics
+- family-aware model fallback chains (including API-key model-unavailable degradation)
 - auth classification behavior
 - health and startup pass/fail mapping
 - logging redaction invariants

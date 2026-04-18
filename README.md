@@ -242,6 +242,14 @@ All tools return structured JSON (as MCP text content). Large responses are chun
 | `health_check` | Diagnostics | Troubleshooting server/Gemini CLI issues |
 | `fetch_chunk` | Get chunked responses | Retrieve remaining parts of large responses |
 
+Query tool fallback chains are family-aware:
+
+- `quick_query`: `flash -> flash_lite -> auto`
+- `deep_research`: `pro -> flash -> flash_lite -> auto`
+- `analyze_directory`: `flash -> flash_lite -> auto`
+
+When using API-key auth, fallback also handles model-unavailable/unsupported errors (not only quota/capacity errors).
+
 ### Example workflows
 
 **Understanding a security vulnerability:**
@@ -382,7 +390,7 @@ For MCP client configuration with Docker:
 - `GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY=0`: Disables strict startup policy checks. This reduces safety guarantees.
 - `.gitignore` blocking files: Gemini respects `.gitignore` by default; toggle `fileFiltering.respectGitIgnore` in `gemini /settings` if you intentionally want ignored files included (note: this changes Gemini behavior globally)
 - `PATH_NOT_ALLOWED`: All `@path` references must resolve inside the configured project root (`process.cwd()` by default). Use `validate_paths` to pre-check paths.
-- `QUOTA_EXCEEDED`: Server retries with fallback models; if all tiers are exhausted, reduce scope (use `quick_query`) or wait for quota reset.
+- `QUOTA_EXCEEDED`: Server retries with fallback models; if all options are exhausted, reduce scope (use `quick_query`) or wait for quota reset.
 
 ## Contributing
 

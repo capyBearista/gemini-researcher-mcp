@@ -44,7 +44,8 @@ export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 
 export const ERROR_MESSAGES = {
   QUOTA_EXCEEDED: "Quota exceeded for quota metric",
-  QUOTA_EXCEEDED_SHORT: "⚠️ Gemini API quota exceeded. Falling back to alternative model...",
+  QUOTA_EXCEEDED_SHORT: "⚠️ Current model unavailable. Falling back to alternative model...",
+  MODEL_FALLBACK_TRIGGERED: "⚠️ Current model unavailable. Falling back to alternative model...",
   TOOL_NOT_FOUND: "not found in registry",
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@src/auth.ts explain what this does') or ask general questions",
   GEMINI_CLI_NOT_FOUND: "Gemini CLI not found on PATH. Install with: npm install -g @google/gemini-cli",
@@ -69,7 +70,7 @@ export const ERROR_MESSAGES = {
 // ============================================================================
 
 export const STATUS_MESSAGES = {
-  QUOTA_SWITCHING: "🚫 Primary model quota exceeded, switching to fallback model...",
+  QUOTA_SWITCHING: "🚫 Current model unavailable due to quota/capacity, switching to fallback model...",
   FALLBACK_RETRY: "⚡ Retrying with fallback model...",
   FALLBACK_SUCCESS: "✅ Fallback model completed successfully",
   AUTO_SELECT_RETRY: "🔄 Retrying with auto-selected model...",
@@ -83,37 +84,37 @@ export const STATUS_MESSAGES = {
 // ============================================================================
 
 export const MODELS = {
-  // Tier 1: Default models (Gemini 3 - requires Preview Features)
+  // Family defaults
   FLASH_DEFAULT: "gemini-3-flash-preview",
   PRO_DEFAULT: "gemini-3-pro-preview",
+  FLASH_LITE_DEFAULT: "gemini-2.5-flash-lite",
 
-  // Tier 2: Fallback models (Gemini 2.5)
-  FLASH_FALLBACK: "gemini-2.5-flash",
-  PRO_FALLBACK: "gemini-2.5-pro",
-
-  // Tier 3: Auto-select (no -m flag, let Gemini CLI choose)
+  // Auto-select (no -m flag, let Gemini CLI choose)
   AUTO_SELECT: null,
 } as const;
 
 /**
- * Model selection configuration per tool
+ * Shared model families used for fallback planning.
  */
-export const MODEL_TIERS = {
-  quick_query: {
-    tier1: MODELS.FLASH_DEFAULT,
-    tier2: MODELS.FLASH_FALLBACK,
-    tier3: MODELS.AUTO_SELECT,
-  },
-  deep_research: {
-    tier1: MODELS.PRO_DEFAULT,
-    tier2: MODELS.PRO_FALLBACK,
-    tier3: MODELS.AUTO_SELECT,
-  },
-  analyze_directory: {
-    tier1: MODELS.FLASH_DEFAULT,
-    tier2: MODELS.FLASH_FALLBACK,
-    tier3: MODELS.AUTO_SELECT,
-  },
+export type ModelFamily = "pro" | "flash" | "flash_lite" | "auto";
+
+/**
+ * Canonical model mapping per family.
+ */
+export const MODEL_FAMILY_MODELS: Record<ModelFamily, string | null> = {
+  pro: MODELS.PRO_DEFAULT,
+  flash: MODELS.FLASH_DEFAULT,
+  flash_lite: MODELS.FLASH_LITE_DEFAULT,
+  auto: MODELS.AUTO_SELECT,
+};
+
+/**
+ * Model-family fallback chains per tool.
+ */
+export const TOOL_MODEL_FALLBACKS = {
+  quick_query: ["flash", "flash_lite", "auto"],
+  deep_research: ["pro", "flash", "flash_lite", "auto"],
+  analyze_directory: ["flash", "flash_lite", "auto"],
 } as const;
 
 // ============================================================================

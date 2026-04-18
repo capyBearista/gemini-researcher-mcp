@@ -4,6 +4,8 @@
 
 import type { ErrorCode } from "./constants.js";
 
+export type UsageAuthMode = "api_key" | "google_login" | "vertex_ai" | "unknown";
+
 // ============================================================================
 // Tool Arguments
 // ============================================================================
@@ -242,6 +244,17 @@ export interface ModelTier {
 }
 
 /**
+ * Internal usage tracking metadata. This is intentionally internal-only
+ * and is not exposed in tool response payloads.
+ */
+export interface InternalUsageTracking {
+  authMode: UsageAuthMode;
+  attemptedModels: string[];
+  fallbackCount: number;
+  quotaLikeFailureCount: number;
+}
+
+/**
  * Gemini CLI execution result
  */
 export interface GeminiExecutionResult {
@@ -251,6 +264,7 @@ export interface GeminiExecutionResult {
   tokensUsed?: number;
   toolCalls?: number;
   filesAccessed?: string[];
+  usageTracking?: InternalUsageTracking;
   error?: string;
 }
 

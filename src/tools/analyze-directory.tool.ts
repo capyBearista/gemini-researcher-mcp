@@ -18,6 +18,7 @@ import {
   enumerateDirectory,
   isCommandLaunchErrorMessage,
   isAuthRelatedErrorMessage,
+  isQuotaOrCapacityErrorMessage,
   Logger,
 } from "../utils/index.js";
 
@@ -238,7 +239,7 @@ For each file, output:
       } else if (isAuthRelatedErrorMessage(errorMessage)) {
         code = ERROR_CODES.AUTH_MISSING;
         nextStep = "Authenticate Gemini CLI: run 'gemini' and select 'Login with Google', or set GEMINI_API_KEY environment variable";
-      } else if (errorMessage.includes("quota")) {
+      } else if (isQuotaOrCapacityErrorMessage(errorMessage)) {
         code = ERROR_CODES.QUOTA_EXCEEDED;
         nextStep = "Quota exhausted after fallback. Wait for quota reset or upgrade plan.";
       }

@@ -2,10 +2,19 @@
  * Gemini CLI executor utility
  *
  * Handles all interactions with the Gemini CLI binary.
- * Implements a 3-tier model fallback strategy for resilience.
+ * Implements a family-aware model fallback strategy for resilience.
  */
 
-import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES, MODELS } from "../constants.js";
+import {
+  SYSTEM_PROMPT,
+  TOOL_MODEL_FALLBACKS,
+  MODEL_FAMILY_MODELS,
+  CLI,
+  ERROR_MESSAGES,
+  STATUS_MESSAGES,
+  MODELS,
+  type ModelFamily,
+} from "../constants.js";
 import { Logger } from "./logger.js";
 import {
   executeCommand,
@@ -16,7 +25,7 @@ import {
   isCommandLaunchErrorMessage,
   type CommandResolution,
 } from "./commandExecutor.js";
-import type { ProgressCallback } from "../types.js";
+import type { ProgressCallback, UsageAuthMode } from "../types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -48,13 +57,16 @@ export interface GeminiResponse {
  */
 export type ToolName = "quick_query" | "deep_research" | "analyze_directory";
 
-/**
- * Internal type for model tier configuration
- */
-interface ModelTierConfig {
-  tier1: string;
-  tier2: string;
-  tier3: null;
+interface ModelAttempt {
+  family: ModelFamily;
+  model: string | null;
+}
+
+interface UsageTracking {
+  authMode: UsageAuthMode;
+  attemptedModels: string[];
+  fallbackCount: number;
+  quotaLikeFailureCount: number;
 }
 
 const READ_ONLY_POLICY_FILE = "read-only-enforcement.toml";
@@ -66,6 +78,19 @@ const AUTH_PROBE_TIMEOUT_MS = 120000;
 const AUTH_PROBE_PROMPT = "Respond with exactly OK. Do not call any tools.";
 const REQUIRED_OUTPUT_FORMATS = [CLI.OUTPUT_FORMATS.JSON, CLI.OUTPUT_FORMATS.STREAM_JSON] as const;
 const AUTH_ERROR_HINTS = ["auth", "login", "credential", "unauthenticated", "permission denied"] as const;
+const QUOTA_ERROR_HINTS = ["quota", "resource_exhausted", "rate limit", "capacity", "too many requests", "429"] as const;
+const API_KEY_MODEL_UNAVAILABLE_HINTS = [
+  "not available",
+  "not supported",
+  "unsupported",
+  "unknown model",
+  "model not found",
+  "not allowed",
+  "not permitted",
+  "permission denied",
+  "does not exist",
+  "unrecognized",
+] as const;
 
 export type AuthStatus = "configured" | "unauthenticated" | "unknown";
 
@@ -327,14 +352,34 @@ export async function supportsRequiredOutputFormats(deps?: GeminiExecutorDeps): 
 // ============================================================================
 
 /**
- * Get model tiers for a specific tool
+ * Get model fallback plan for a specific tool.
  *
  * @param toolName - The tool requesting Gemini execution
- * @returns Array of model names to try in order (null = auto-select)
+ * @returns Ordered list of model attempts
  */
-function getModelTiers(toolName: ToolName): (string | null)[] {
-  const config: ModelTierConfig = MODEL_TIERS[toolName] ?? MODEL_TIERS.quick_query;
-  return [config.tier1, config.tier2, config.tier3];
+function getModelFallbackPlan(toolName: ToolName): ModelAttempt[] {
+  const families = TOOL_MODEL_FALLBACKS[toolName] ?? TOOL_MODEL_FALLBACKS.quick_query;
+  return families.map((family) => ({
+    family,
+    model: MODEL_FAMILY_MODELS[family],
+  }));
+}
+
+function detectAuthModeForExecution(): UsageAuthMode {
+  if (process.env.GEMINI_API_KEY) {
+    return "api_key";
+  }
+
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.VERTEX_AI_PROJECT) {
+    return "vertex_ai";
+  }
+
+  return "google_login";
+}
+
+export function isQuotaOrCapacityErrorMessage(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return QUOTA_ERROR_HINTS.some((hint) => lowered.includes(hint));
 }
 
 /**
@@ -348,16 +393,33 @@ function isQuotaError(error: unknown): boolean {
     return false;
   }
 
-  const message = error.message.toLowerCase();
+  return isQuotaOrCapacityErrorMessage(error.message);
+}
 
-  return (
-    message.includes("quota") ||
-    message.includes("resource_exhausted") ||
-    message.includes("rate limit") ||
-    message.includes("capacity") ||
-    message.includes("too many requests") ||
-    message.includes("429")
-  );
+function isApiKeyModelUnavailableError(error: unknown, authMode: UsageAuthMode): boolean {
+  if (authMode !== "api_key" || !(error instanceof Error)) {
+    return false;
+  }
+
+  const lowered = error.message.toLowerCase();
+
+  if (!lowered.includes("model")) {
+    return false;
+  }
+
+  return API_KEY_MODEL_UNAVAILABLE_HINTS.some((hint) => lowered.includes(hint));
+}
+
+function getFallbackReason(error: unknown, authMode: UsageAuthMode): "quota_or_capacity" | "api_key_model_unavailable" | null {
+  if (isQuotaError(error)) {
+    return "quota_or_capacity";
+  }
+
+  if (isApiKeyModelUnavailableError(error, authMode)) {
+    return "api_key_model_unavailable";
+  }
+
+  return null;
 }
 
 /**
@@ -503,25 +565,34 @@ export async function executeGeminiCLI(
   // Prepend system prompt
   const finalPrompt = `${SYSTEM_PROMPT}\n\n---\n\nUSER REQUEST:\n${prompt}`;
 
-  // Get model tiers for this tool
-  const modelTiers = getModelTiers(toolName);
+  // Get model fallback plan for this tool
+  const modelPlan = getModelFallbackPlan(toolName);
+
+  const usageTracking: UsageTracking = {
+    authMode: detectAuthModeForExecution(),
+    attemptedModels: [],
+    fallbackCount: 0,
+    quotaLikeFailureCount: 0,
+  };
 
   Logger.info(`Executing Gemini CLI for tool: ${toolName}`);
 
-  // Try each tier with fallback
+  // Try each model in fallback plan
   let lastError: Error | null = null;
 
-  for (let i = 0; i < modelTiers.length; i++) {
-    const model = modelTiers[i];
-    const tierName = model ?? "auto-select";
+  for (let i = 0; i < modelPlan.length; i++) {
+    const attempt = modelPlan[i];
+    const model = attempt.model;
+    const modelName = model ?? "auto";
+    usageTracking.attemptedModels.push(modelName);
 
     try {
-      Logger.debug(`Attempting tier ${i + 1} with model: ${tierName}`);
+      Logger.debug(`Attempting model ${i + 1}/${modelPlan.length}: ${modelName} (${attempt.family})`);
       const commandConfig = getGeminiCommandConfig();
 
       if (i > 0) {
         // Log fallback attempt
-        const message = i === 1 ? STATUS_MESSAGES.FALLBACK_RETRY : STATUS_MESSAGES.AUTO_SELECT_RETRY;
+        const message = model === null ? STATUS_MESSAGES.AUTO_SELECT_RETRY : STATUS_MESSAGES.FALLBACK_RETRY;
         Logger.warn(message);
         onProgress?.(message + "\n");
       }
@@ -540,7 +611,12 @@ export async function executeGeminiCLI(
       const parsed = parseGeminiOutput(output);
       const latencyMs = Date.now() - startTime;
 
-      Logger.info(`Gemini CLI completed in ${latencyMs}ms with model: ${tierName}`);
+      Logger.info(`Gemini CLI completed in ${latencyMs}ms with model: ${modelName}`);
+      Logger.debug("Gemini CLI usage tracking", {
+        toolName,
+        ...usageTracking,
+        selectedModel: modelName,
+      });
 
       if (i > 0) {
         Logger.info(STATUS_MESSAGES.FALLBACK_SUCCESS);
@@ -554,20 +630,31 @@ export async function executeGeminiCLI(
           toolCalls: parsed.toolCalls || 0,
           latencyMs,
         },
-        model: model ?? "auto",
+        model: modelName,
       };
     } catch (error) {
 
       lastError = error instanceof Error ? error : new Error(String(error));
+      const fallbackReason = getFallbackReason(error, usageTracking.authMode);
 
-      // Check if this is a quota error and we have more tiers to try
-      if (isQuotaError(error) && i < modelTiers.length - 1) {
-        Logger.warn(`${ERROR_MESSAGES.QUOTA_EXCEEDED_SHORT} (tier ${i + 1})`);
+      if (fallbackReason === "quota_or_capacity") {
+        usageTracking.quotaLikeFailureCount += 1;
+      }
+
+      // Check if this is a fallback-eligible error and we have more models to try
+      if (fallbackReason !== null && i < modelPlan.length - 1) {
+        usageTracking.fallbackCount += 1;
+        Logger.warn(`${ERROR_MESSAGES.MODEL_FALLBACK_TRIGGERED} (${fallbackReason}; attempt ${i + 1}/${modelPlan.length})`);
         continue; // Try next tier
       }
 
       // Not a quota error or no more tiers - throw
       Logger.error(`Gemini CLI failed: ${lastError.message}`);
+      Logger.debug("Gemini CLI usage tracking", {
+        toolName,
+        ...usageTracking,
+        selectedModel: null,
+      });
       throw lastError;
     }
   }
@@ -624,7 +711,7 @@ export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<Gemini
     // Force a broadly-available model for this probe so health checks don't hang
     // when preview models have poor availability.
     CLI.FLAGS.MODEL,
-    MODELS.FLASH_FALLBACK,
+    MODELS.FLASH_LITE_DEFAULT,
     CLI.FLAGS.OUTPUT_FORMAT,
     CLI.OUTPUT_FORMATS.JSON,
     CLI.FLAGS.APPROVAL_MODE,

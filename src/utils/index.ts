@@ -31,6 +31,7 @@ export {
   getGeminiCliCapabilityChecks,
   getGeminiCommandConfig,
   isAuthRelatedErrorMessage,
+  isQuotaOrCapacityErrorMessage,
   type AuthStatus,
   type GeminiResponse,
   type ToolName,

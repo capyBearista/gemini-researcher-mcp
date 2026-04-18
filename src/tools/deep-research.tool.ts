@@ -19,6 +19,7 @@ import {
   cacheResponse,
   isCommandLaunchErrorMessage,
   isAuthRelatedErrorMessage,
+  isQuotaOrCapacityErrorMessage,
   Logger,
 } from "../utils/index.js";
 
@@ -181,7 +182,7 @@ export const deepResearchTool: UnifiedTool = {
       } else if (isAuthRelatedErrorMessage(errorMessage)) {
         code = ERROR_CODES.AUTH_MISSING;
         nextStep = "Authenticate Gemini CLI: run 'gemini' and select 'Login with Google', or set GEMINI_API_KEY environment variable";
-      } else if (errorMessage.includes("quota")) {
+      } else if (isQuotaOrCapacityErrorMessage(errorMessage)) {
         code = ERROR_CODES.QUOTA_EXCEEDED;
         nextStep = "Quota exhausted after fallback. Wait for quota reset or upgrade plan. Consider using quick_query for lighter tasks.";
       }

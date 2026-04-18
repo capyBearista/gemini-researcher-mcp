@@ -191,7 +191,8 @@ toolRegistry.push(myTool);
 **Server-managed model selection**
 - Agents cannot choose models
 - Server selects models based on tool type
-- Implement 3-tier fallback strategy (default → fallback → auto-select)
+- Implement family-aware fallback chains (for example `deep_research: pro -> flash -> flash_lite -> auto`)
+- API-key auth also degrades on model-unavailable/unsupported errors
 
 **Project-root path restriction**
 - All `@path` references must resolve within project root

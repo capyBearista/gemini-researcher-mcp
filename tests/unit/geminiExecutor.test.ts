@@ -13,6 +13,7 @@ import {
   isAdminPolicyEnforced,
   getReadOnlyPolicyPath,
   isAuthRelatedErrorMessage,
+  isQuotaOrCapacityErrorMessage,
   getGeminiCliCapabilityChecks,
   supportsRequiredOutputFormats,
   getGeminiCommandConfig,
@@ -99,7 +100,7 @@ describe("geminiExecutor CLI contract", () => {
     assert.ok(!calls[0].args.includes("--admin-policy"));
   });
 
-  it("falls back to tier-2 on quota error with exact argv", async () => {
+  it("falls back from flash to flash_lite on quota-like error with exact argv", async () => {
     const calls: Array<{ command: string; args: string[] }> = [];
     let invocation = 0;
 
@@ -120,11 +121,11 @@ describe("geminiExecutor CLI contract", () => {
 
     assert.strictEqual(calls.length, 2);
     assert.deepStrictEqual(calls[0].args.slice(0, 2), ["-m", MODELS.FLASH_DEFAULT]);
-    assert.deepStrictEqual(calls[1].args.slice(0, 2), ["-m", MODELS.FLASH_FALLBACK]);
-    assert.strictEqual(result.model, MODELS.FLASH_FALLBACK);
+    assert.deepStrictEqual(calls[1].args.slice(0, 2), ["-m", MODELS.FLASH_LITE_DEFAULT]);
+    assert.strictEqual(result.model, MODELS.FLASH_LITE_DEFAULT);
   });
 
-  it("falls back to tier-3 auto-select (no -m flag) after two quota errors", async () => {
+  it("falls back to auto-select (no -m flag) after flash and flash_lite quota errors", async () => {
     const calls: Array<{ command: string; args: string[] }> = [];
     let invocation = 0;
 
@@ -144,8 +145,37 @@ describe("geminiExecutor CLI contract", () => {
     });
 
     assert.strictEqual(calls.length, 3);
+    assert.deepStrictEqual(calls[0].args.slice(0, 2), ["-m", MODELS.FLASH_DEFAULT]);
+    assert.deepStrictEqual(calls[1].args.slice(0, 2), ["-m", MODELS.FLASH_LITE_DEFAULT]);
     assert.ok(calls[2].args[0] !== "-m");
     assert.ok(!calls[2].args.includes("-m"));
+    assert.strictEqual(result.model, "auto");
+  });
+
+  it("uses deep_research fallback chain pro -> flash -> flash_lite -> auto", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    let invocation = 0;
+
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      invocation += 1;
+
+      if (invocation <= 3) {
+        throw new Error("RESOURCE_EXHAUSTED: quota issue");
+      }
+
+      return JSON.stringify({ response: "deep ok", usage: { totalTokens: 22 }, toolCalls: 0 });
+    };
+
+    const result = await executeGeminiCLI("Deep chain", "deep_research", undefined, {
+      executeCommandFn: mockExecuteCommand,
+    });
+
+    assert.strictEqual(calls.length, 4);
+    assert.deepStrictEqual(calls[0].args.slice(0, 2), ["-m", MODELS.PRO_DEFAULT]);
+    assert.deepStrictEqual(calls[1].args.slice(0, 2), ["-m", MODELS.FLASH_DEFAULT]);
+    assert.deepStrictEqual(calls[2].args.slice(0, 2), ["-m", MODELS.FLASH_LITE_DEFAULT]);
+    assert.ok(!calls[3].args.includes("-m"));
     assert.strictEqual(result.model, "auto");
   });
 
@@ -162,6 +192,51 @@ describe("geminiExecutor CLI contract", () => {
         executeCommandFn: mockExecuteCommand,
       }),
       /Authentication failed/
+    );
+
+    assert.strictEqual(calls.length, 1);
+  });
+
+  it("falls back for api_key auth when selected model is unavailable", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+
+    const calls: Array<{ command: string; args: string[] }> = [];
+    let invocation = 0;
+
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      invocation += 1;
+
+      if (invocation === 1) {
+        throw new Error("Model gemini-3-pro-preview is not available for this API key");
+      }
+
+      return JSON.stringify({ response: "api-key fallback ok", usage: { totalTokens: 6 }, toolCalls: 0 });
+    };
+
+    const result = await executeGeminiCLI("Analyze api key fallback", "deep_research", undefined, {
+      executeCommandFn: mockExecuteCommand,
+    });
+
+    assert.strictEqual(calls.length, 2);
+    assert.deepStrictEqual(calls[0].args.slice(0, 2), ["-m", MODELS.PRO_DEFAULT]);
+    assert.deepStrictEqual(calls[1].args.slice(0, 2), ["-m", MODELS.FLASH_DEFAULT]);
+    assert.strictEqual(result.model, MODELS.FLASH_DEFAULT);
+  });
+
+  it("does not fallback on model-unavailable errors for non-api_key auth", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      throw new Error("Model gemini-3-pro-preview is not available for this account");
+    };
+
+    await assert.rejects(
+      executeGeminiCLI("Analyze unavailable model", "deep_research", undefined, {
+        executeCommandFn: mockExecuteCommand,
+      }),
+      /not available/
     );
 
     assert.strictEqual(calls.length, 1);
@@ -257,7 +332,7 @@ describe("checkGeminiAuth behavior", () => {
     assert.strictEqual(calls.length, 1);
     assert.deepStrictEqual(calls[0].args.slice(0, 8), [
       "-m",
-      MODELS.FLASH_FALLBACK,
+      MODELS.FLASH_LITE_DEFAULT,
       "--output-format",
       "json",
       "--approval-mode",
@@ -359,6 +434,15 @@ describe("auth error classifier", () => {
     assert.strictEqual(isAuthRelatedErrorMessage("Unauthenticated: login required"), true);
     assert.strictEqual(isAuthRelatedErrorMessage("Permission denied while loading credentials"), true);
     assert.strictEqual(isAuthRelatedErrorMessage("Temporary network failure"), false);
+  });
+});
+
+describe("quota/capacity error classifier", () => {
+  it("detects quota and capacity-like errors consistently", () => {
+    assert.strictEqual(isQuotaOrCapacityErrorMessage("Quota exceeded for quota metric"), true);
+    assert.strictEqual(isQuotaOrCapacityErrorMessage("RESOURCE_EXHAUSTED: Rate limit exceeded"), true);
+    assert.strictEqual(isQuotaOrCapacityErrorMessage("429 Too Many Requests"), true);
+    assert.strictEqual(isQuotaOrCapacityErrorMessage("Temporary network failure"), false);
   });
 });
 
