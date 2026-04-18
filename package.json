@@ -15,7 +15,7 @@
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "test:unit": "node --import tsx --test tests/unit/**/*.test.ts",
-    "test:integration": "node --import tsx --test tests/integration/**/*.test.ts",
+    "test:integration": "node --import tsx --test tests/integration/tools.integration.test.ts",
     "test:smoke:live": "node tests/manual/mcp-live-smoke.mjs",
     "prepublishOnly": "npm run build && npm test"
   },
