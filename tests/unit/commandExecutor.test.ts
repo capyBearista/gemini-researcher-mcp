@@ -1,7 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { EventEmitter } from "node:events";
-import { executeCommand, executeCommandWithResolution } from "../../src/utils/commandExecutor.js";
+import {
+  executeCommand,
+  executeCommandWithResolution,
+  isCommandNotFoundErrorMessage,
+} from "../../src/utils/commandExecutor.js";
 
 type FakeSpawnStep =
   | {
@@ -228,5 +232,25 @@ describe("commandExecutor Windows launch fallbacks", () => {
 
     assert.strictEqual(calls.length, 1);
     assert.strictEqual(calls[0].command, "C:\\tools\\gemini.exe");
+  });
+});
+
+describe("commandExecutor not-found classifier", () => {
+  it("detects common command-not-found messages across platforms", () => {
+    assert.strictEqual(
+      isCommandNotFoundErrorMessage("Failed to spawn command 'gemini': spawn gemini ENOENT"),
+      true
+    );
+    assert.strictEqual(isCommandNotFoundErrorMessage("/bin/sh: gemini: command not found"), true);
+    assert.strictEqual(
+      isCommandNotFoundErrorMessage(
+        "'gemini' is not recognized as an internal or external command, operable program or batch file."
+      ),
+      true
+    );
+  });
+
+  it("does not classify unrelated process failures as not-found", () => {
+    assert.strictEqual(isCommandNotFoundErrorMessage("Command failed with exit code 1: rate limit exceeded"), false);
   });
 });

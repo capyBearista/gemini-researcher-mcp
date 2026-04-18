@@ -172,6 +172,15 @@ export function isCommandLaunchErrorMessage(message: string): boolean {
   );
 }
 
+export function isCommandNotFoundErrorMessage(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes("enoent") ||
+    lowered.includes("not found") ||
+    lowered.includes("is not recognized as an internal or external command")
+  );
+}
+
 function buildResolution(
   command: string,
   attemptedLabels: CommandAttemptLabel[],

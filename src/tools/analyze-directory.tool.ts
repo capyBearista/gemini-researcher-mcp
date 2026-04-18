@@ -17,6 +17,7 @@ import {
   isWithinProjectRoot,
   enumerateDirectory,
   isCommandLaunchErrorMessage,
+  isCommandNotFoundErrorMessage,
   isAuthRelatedErrorMessage,
   isQuotaOrCapacityErrorMessage,
   Logger,
@@ -233,7 +234,7 @@ For each file, output:
       if (isCommandLaunchErrorMessage(errorMessage)) {
         code = ERROR_CODES.GEMINI_CLI_LAUNCH_FAILED;
         nextStep = ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED;
-      } else if (errorMessage.includes("not found") || errorMessage.includes("ENOENT")) {
+      } else if (isCommandNotFoundErrorMessage(errorMessage)) {
         code = ERROR_CODES.GEMINI_CLI_NOT_FOUND;
         nextStep = "Install Gemini CLI: npm install -g @google/gemini-cli, or run setup wizard: npx gemini-researcher init";
       } else if (isAuthRelatedErrorMessage(errorMessage)) {

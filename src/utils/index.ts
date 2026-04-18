@@ -14,6 +14,7 @@ export {
   commandExists,
   getCommandVersion,
   isCommandLaunchErrorMessage,
+  isCommandNotFoundErrorMessage,
 } from "./commandExecutor.js";
 
 // Gemini CLI execution
