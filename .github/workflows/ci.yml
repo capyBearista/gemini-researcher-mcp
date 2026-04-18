@@ -47,3 +47,6 @@ jobs:
 
       - name: Run windows launch smoke tests
         run: node --import tsx --test tests/unit/commandExecutor.test.ts tests/unit/setup-wizard.test.ts
+
+      - name: Run windows tool integration tests
+        run: npm run test:integration

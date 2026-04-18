@@ -217,9 +217,11 @@ When changing CLI integration, setup, diagnostics, or logging, preserve these in
    - No server-generated `-y` or `--yolo`.
 
 1.1 **Cross-platform launch contract**
-   - Launcher must handle Windows shell-less spawn semantics.
-   - Required fallback order on win32 launch failures: direct -> `.cmd` shim -> `cmd /d /s /c`.
-   - Launch failures must be classified before capability/auth failures.
+    - Launcher must handle Windows shell-less spawn semantics.
+    - Required fallback order on win32 launch failures: direct -> `.cmd` shim -> `cmd /d /s /c`.
+    - If `GEMINI_RESEARCHER_GEMINI_COMMAND` is an absolute path, skip win32 shim/shell fallback chain.
+    - Launch failures must be classified before capability/auth failures.
+    - `GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX` must be applied before generated Gemini flags.
 
 2. **Auth classification**
    - `configured`: auth confirmed.

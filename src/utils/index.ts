@@ -8,6 +8,9 @@ export { Logger } from "./logger.js";
 // Command execution
 export {
   executeCommand,
+  executeCommandWithResolution,
+  type CommandResolution,
+  type ExecuteCommandResult,
   commandExists,
   getCommandVersion,
   isCommandLaunchErrorMessage,
@@ -26,11 +29,14 @@ export {
   supportsAdminPolicyFlag,
   supportsRequiredOutputFormats,
   getGeminiCliCapabilityChecks,
+  getGeminiCommandConfig,
   isAuthRelatedErrorMessage,
   type AuthStatus,
   type GeminiResponse,
   type ToolName,
   type GeminiCliCapabilityChecks,
+  type GeminiCommandResolution,
+  type GeminiCommandConfig,
 } from "./geminiExecutor.js";
 
 // Path validation

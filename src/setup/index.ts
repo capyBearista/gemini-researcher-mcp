@@ -3,8 +3,9 @@
  * Exports the setup wizard functionality
  */
 
-export { runSetupWizard, validateEnvironment } from "./wizard.js";
+export { runSetupWizard, validateEnvironment, buildWindowsShimSuggestion } from "./wizard.js";
 export type {
   ValidationResult,
   GeminiInstallCheck,
+  HostConfigSuggestion,
 } from "./wizard.js";

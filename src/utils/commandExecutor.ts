@@ -4,17 +4,43 @@
  */
 
 import spawn from "cross-spawn";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { Logger } from "./logger.js";
 
 const WINDOWS_RETRYABLE_SPAWN_CODES = new Set(["ENOENT", "EINVAL"]);
 
 type SpawnFunction = typeof spawn;
 
+export type CommandAttemptLabel = "direct" | "cmd_shim" | "cmd_shell";
+
+export interface CommandResolution {
+  command: string;
+  attemptSucceeded: CommandAttemptLabel | null;
+  resolvedPath: string | null;
+  fallbacksAttempted: CommandAttemptLabel[];
+}
+
+export interface ExecuteCommandResult {
+  output: string;
+  resolution: CommandResolution;
+}
+
+export class CommandLaunchError extends Error {
+  readonly resolution: CommandResolution;
+
+  constructor(message: string, resolution: CommandResolution) {
+    super(message);
+    this.name = "CommandLaunchError";
+    this.resolution = resolution;
+  }
+}
+
 interface CommandAttempt {
   command: string;
   args: string[];
   shell: boolean;
-  label: "direct" | "cmd_shim" | "cmd_shell";
+  label: CommandAttemptLabel;
 }
 
 class CommandExecutionError extends Error {
@@ -46,6 +72,10 @@ function commandHasKnownExecutableExtension(command: string): boolean {
   return lowered.endsWith(".cmd") || lowered.endsWith(".exe") || lowered.endsWith(".bat") || lowered.endsWith(".ps1");
 }
 
+function isAbsoluteCommandPath(command: string): boolean {
+  return path.isAbsolute(command) || path.win32.isAbsolute(command) || path.posix.isAbsolute(command);
+}
+
 function quoteForWindowsCmd(value: string): string {
   if (value.length === 0) {
     return '""';
@@ -71,6 +101,10 @@ function buildCommandAttempts(command: string, args: string[], platform: NodeJS.
   ];
 
   if (platform !== "win32") {
+    return attempts;
+  }
+
+  if (isAbsoluteCommandPath(command)) {
     return attempts;
   }
 
@@ -136,6 +170,19 @@ export function isCommandLaunchErrorMessage(message: string): boolean {
     lowered.includes("failed to spawn") ||
     (lowered.includes("spawn") && (lowered.includes("enoent") || lowered.includes("einval")))
   );
+}
+
+function buildResolution(
+  command: string,
+  attemptedLabels: CommandAttemptLabel[],
+  successfulAttempt?: CommandAttempt
+): CommandResolution {
+  return {
+    command,
+    attemptSucceeded: successfulAttempt?.label ?? null,
+    resolvedPath: successfulAttempt?.command ?? null,
+    fallbacksAttempted: [...attemptedLabels],
+  };
 }
 
 async function runSingleCommandAttempt(
@@ -235,28 +282,49 @@ export async function executeCommand(
   onProgress?: (newOutput: string) => void,
   options?: ExecuteCommandOptions
 ): Promise<string> {
+  const result = await executeCommandWithResolution(command, args, onProgress, options);
+  return result.output;
+}
+
+export async function executeCommandWithResolution(
+  command: string,
+  args: string[],
+  onProgress?: (newOutput: string) => void,
+  options?: ExecuteCommandOptions
+): Promise<ExecuteCommandResult> {
   const platform = options?.platform ?? process.platform;
   const spawnFn = options?.spawnFn ?? spawn;
   const timeoutMs = options?.timeoutMs;
 
   const attempts = buildCommandAttempts(command, args, platform);
   const attemptedCommands: string[] = [];
+  const attemptedLabels: CommandAttemptLabel[] = [];
 
   for (const attempt of attempts) {
     const startTime = Date.now();
     Logger.commandExecution(attempt.command, attempt.args, startTime);
     attemptedCommands.push(formatAttempt(attempt));
+    attemptedLabels.push(attempt.label);
 
     try {
       const output = await runSingleCommandAttempt(attempt, onProgress, timeoutMs, spawnFn);
       Logger.commandComplete(startTime, 0, output.length);
-      return output;
+      return {
+        output,
+        resolution: buildResolution(command, attemptedLabels, attempt),
+      };
     } catch (error) {
       if (!(error instanceof CommandExecutionError)) {
         throw error;
       }
 
       if (error.kind === "spawn" && canRetryWindowsSpawnFailure(error, platform)) {
+        if (attemptedLabels.length >= attempts.length) {
+          const launchMessage = buildLaunchFailureMessage(command, error, attemptedCommands);
+          Logger.error(launchMessage);
+          throw new CommandLaunchError(launchMessage, buildResolution(command, attemptedLabels));
+        }
+
         Logger.warn(
           `Command spawn failed (${error.errorCode ?? "unknown"}) using '${error.attempt.label}', retrying fallback...`
         );
@@ -266,7 +334,7 @@ export async function executeCommand(
       if (error.kind === "spawn") {
         const launchMessage = buildLaunchFailureMessage(command, error, attemptedCommands);
         Logger.error(launchMessage);
-        throw new Error(launchMessage);
+        throw new CommandLaunchError(launchMessage, buildResolution(command, attemptedLabels));
       }
 
       if (error.kind === "timeout") {
@@ -281,7 +349,7 @@ export async function executeCommand(
 
   const fallbackMessage = `Command launch failed for '${command}'. Attempted commands: ${attemptedCommands.join(" -> ")}`;
   Logger.error(fallbackMessage);
-  throw new Error(fallbackMessage);
+  throw new CommandLaunchError(fallbackMessage, buildResolution(command, attemptedLabels));
 }
 
 /**
@@ -291,6 +359,10 @@ export async function executeCommand(
  * @returns Promise resolving to true if command exists
  */
 export async function commandExists(command: string): Promise<boolean> {
+  if (isAbsoluteCommandPath(command)) {
+    return fs.existsSync(command);
+  }
+
   const checkCommand = process.platform === "win32" ? "where" : "which";
 
   try {

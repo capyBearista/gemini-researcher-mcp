@@ -263,6 +263,7 @@ Setup Complete! 🎉
 `,
   STEP_GEMINI_INSTALL: "[1/2] Checking Gemini CLI installation...",
   STEP_TEST: "[2/2] Testing Gemini CLI...",
+  STEP_NPX_CHECK: "[preflight] Checking npx availability...",
 
   GEMINI_FOUND: (path: string, version: string) => `  ✓ Gemini CLI found at ${path} (version ${version})`,
   GEMINI_NOT_FOUND: `  ✗ Gemini CLI not found
@@ -291,6 +292,8 @@ Setup Complete! 🎉
 
   TEST_SUCCESS: "  ✓ Test invocation successful",
   TEST_FAILED: (error: string) => `  ✗ Test invocation failed: ${error}`,
+  NPX_OK: "  ✓ npx is launchable",
+  NPX_MISSING: (reason: string) => `  ⚠ npx not available or not launchable: ${reason}`,
 
   NEXT_STEPS: `
 Next steps:

@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { EventEmitter } from "node:events";
-import { executeCommand } from "../../src/utils/commandExecutor.js";
+import { executeCommand, executeCommandWithResolution } from "../../src/utils/commandExecutor.js";
 
 type FakeSpawnStep =
   | {
@@ -183,5 +183,50 @@ describe("commandExecutor Windows launch fallbacks", () => {
 
     assert.strictEqual(calls.length, 1);
     assert.strictEqual(calls[0].command, "gemini");
+  });
+
+  it("reports resolution metadata when cmd shim fallback succeeds", async () => {
+    const calls: FakeSpawnCall[] = [];
+    const spawnFn = createSpawnFn(
+      [
+        { type: "spawn_error", code: "ENOENT", message: "spawn gemini ENOENT" },
+        { type: "exit", code: 0, stdout: "ok\n" },
+      ],
+      calls
+    );
+
+    const result = await executeCommandWithResolution(
+      "gemini",
+      ["--version"],
+      undefined,
+      { platform: "win32", spawnFn } as never
+    );
+
+    assert.strictEqual(result.output, "ok");
+    assert.strictEqual(result.resolution.command, "gemini");
+    assert.strictEqual(result.resolution.attemptSucceeded, "cmd_shim");
+    assert.strictEqual(result.resolution.resolvedPath, "gemini.cmd");
+    assert.deepStrictEqual(result.resolution.fallbacksAttempted, ["direct", "cmd_shim"]);
+  });
+
+  it("skips win32 fallback chain for absolute command paths", async () => {
+    const calls: FakeSpawnCall[] = [];
+    const spawnFn = createSpawnFn(
+      [{ type: "spawn_error", code: "ENOENT", message: "spawn C:\\tools\\gemini.exe ENOENT" }],
+      calls
+    );
+
+    await assert.rejects(
+      executeCommand(
+        "C:\\tools\\gemini.exe",
+        ["--version"],
+        undefined,
+        { platform: "win32", spawnFn } as never
+      ),
+      /Command launch failed for 'C:\\tools\\gemini\.exe'/
+    );
+
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].command, "C:\\tools\\gemini.exe");
   });
 });

@@ -166,6 +166,14 @@ export interface Diagnostics {
   projectRoot: string;
   geminiOnPath: boolean;
   geminiVersion?: string | null;
+  resolution?: {
+    command: string;
+    attemptSucceeded: "direct" | "cmd_shim" | "cmd_shell" | null;
+    resolvedPath: string | null;
+    fallbacksAttempted: Array<"direct" | "cmd_shim" | "cmd_shell">;
+    configuredCommand?: string;
+    configuredArgsPrefix?: string;
+  };
   authConfigured: boolean;
   authStatus?: "configured" | "unauthenticated" | "unknown";
   authMethod?: string;

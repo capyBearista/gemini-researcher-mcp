@@ -3,7 +3,7 @@
  * Tests all 6 tools with mocked Gemini output
  */
 
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import * as fs from "fs";
 import * as path from "path";
@@ -11,6 +11,7 @@ import * as os from "os";
 
 // Import tools and registry
 import { toolRegistry, executeTool, getToolDefinitions } from "../../src/tools/index.js";
+import { runHealthCheck } from "../../src/tools/health-check.tool.js";
 
 // Import utilities for setup
 import { clearAll as clearCache } from "../../src/utils/responseCache.js";
@@ -216,6 +217,46 @@ describe("Tool Integration Tests", () => {
 
       assert.ok(typeof parsed === "object");
     });
+
+    it("should include command resolution diagnostics from capability probe", async () => {
+      const result = await runHealthCheck(
+        {
+          includeDiagnostics: true,
+        },
+        {
+          getProjectRootFn: () => testDir,
+          isGeminiCLIInstalledFn: async () => true,
+          getGeminiVersionFn: async () => "0.38.1",
+          getGeminiCliCapabilityChecksFn: async () => ({
+            probeSucceeded: true,
+            launchFailed: false,
+            hasAdminPolicyFlag: true,
+            supportsRequiredOutputFormats: true,
+            outputFormatChoices: ["json", "stream-json"],
+            resolution: {
+              command: "gemini",
+              attemptSucceeded: "cmd_shim",
+              resolvedPath: "C:\\Users\\test\\AppData\\Roaming\\npm\\gemini.cmd",
+              fallbacksAttempted: ["direct", "cmd_shim"],
+            }
+          }),
+          checkGeminiAuthFn: async () => ({
+            configured: true,
+            status: "configured",
+            method: "google_login",
+          }),
+          isAdminPolicyEnforcedFn: () => true,
+          hasReadOnlyPolicyFileFn: () => true,
+
+        }
+      );
+
+      const parsed = JSON.parse(result);
+      assert.ok(parsed.diagnostics?.resolution);
+      assert.strictEqual(parsed.diagnostics.resolution.command, "gemini");
+      assert.strictEqual(parsed.diagnostics.resolution.attemptSucceeded, "cmd_shim");
+      assert.deepStrictEqual(parsed.diagnostics.resolution.fallbacksAttempted, ["direct", "cmd_shim"]);
+    });
   });
 
   describe("fetch_chunk tool", () => {
@@ -310,8 +351,50 @@ describe("Tool Integration Tests", () => {
         "Expected missing or launch failure error code"
       );
     });
-  });
 
+    it("should succeed when direct launch fails but .cmd shim fallback succeeds", { skip: process.platform !== "win32" }, async () => {
+      const shimBase = path.join(testDir, "fakegem");
+      const shimPath = `${shimBase}.cmd`;
+      const shimScript = [
+        "@echo off",
+        'echo {"response":"shim-ok","usage":{"totalTokens":1},"toolCalls":0}',
+        "",
+      ].join("\r\n");
+
+      fs.writeFileSync(shimPath, shimScript, { encoding: "utf-8" });
+
+      const relativeCommand = path.relative(process.cwd(), shimBase);
+      const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+      const originalCommandOverride = process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+
+      process.env.GEMINI_RESEARCHER_GEMINI_COMMAND = relativeCommand;
+
+      Object.defineProperty(process, "platform", {
+        value: "win32",
+      });
+
+      try {
+        const result = await executeTool("quick_query", {
+          prompt: "return shim result",
+        });
+
+        const parsed = JSON.parse(result);
+        assert.strictEqual(parsed.tool, "quick_query");
+        assert.strictEqual(parsed.answer, "shim-ok");
+
+      } finally {
+        if (originalPlatformDescriptor) {
+          Object.defineProperty(process, "platform", originalPlatformDescriptor);
+        }
+
+        if (originalCommandOverride !== undefined) {
+          process.env.GEMINI_RESEARCHER_GEMINI_COMMAND = originalCommandOverride;
+        } else {
+          delete process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+        }
+      }
+    });
+  });
   describe("deep_research tool", () => {
     it("should return error for empty prompt", async () => {
       const result = await executeTool("deep_research", {

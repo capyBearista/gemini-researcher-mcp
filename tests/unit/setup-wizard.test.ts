@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it, beforeEach } from "node:test";
-import { validateEnvironment } from "../../src/setup/wizard.js";
+import { validateEnvironment, buildWindowsShimSuggestion } from "../../src/setup/wizard.js";
+
 
 describe("setup wizard startup validation classification", () => {
   beforeEach(() => {
@@ -62,4 +63,52 @@ describe("setup wizard startup validation classification", () => {
     assert.ok(result.error?.includes("capability probe failed"));
     assert.ok(result.error?.includes("Temporary network failure"));
   });
+});
+
+describe("setup wizard suggestion helper", () => {
+  beforeEach(() => {
+    delete process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY;
+  });
+
+  it("returns .cmd suggestion when only cmd shell fallback succeeds", () => {
+    const suggestion = buildWindowsShimSuggestion({
+      command: "gemini",
+      attemptSucceeded: "cmd_shell",
+      resolvedPath: "cmd",
+      fallbacksAttempted: ["direct", "cmd_shim", "cmd_shell"],
+    });
+
+    assert.deepStrictEqual(suggestion, {
+      command: "gemini.cmd",
+      args: [],
+    });
+  });
+
+  it("suggests shim based on configured command name if applicable", () => {
+    const suggestion = buildWindowsShimSuggestion({
+      command: "my-gemini",
+      configuredCommand: "my-gemini",
+      attemptSucceeded: "cmd_shell",
+      resolvedPath: "cmd",
+      fallbacksAttempted: ["direct", "cmd_shim", "cmd_shell"],
+    });
+
+    assert.deepStrictEqual(suggestion, {
+      command: "my-gemini.cmd",
+      args: [],
+    });
+  });
+
+  it("does not suggest shim when command is already explicit executable", () => {
+    const suggestion = buildWindowsShimSuggestion({
+      command: "gemini",
+      configuredCommand: "C:/tools/gemini.exe",
+      attemptSucceeded: "cmd_shell",
+      resolvedPath: "cmd",
+      fallbacksAttempted: ["direct", "cmd_shell"],
+    });
+
+    assert.strictEqual(suggestion, null);
+  });
+
 });

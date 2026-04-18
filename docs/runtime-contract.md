@@ -23,6 +23,11 @@ All server-generated Gemini invocations for query tools follow this pattern:
 gemini [ -m <model> ] --output-format json --approval-mode default [--admin-policy <path>] -p "<prompt>"
 ```
 
+Command selection can be overridden via environment:
+
+- `GEMINI_RESEARCHER_GEMINI_COMMAND`: replace `gemini` with custom command or absolute path.
+- `GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX`: prepend stable extra args to every Gemini invocation.
+
 Required rules:
 
 1. `--output-format json` is always present.
@@ -41,6 +46,8 @@ Required launch strategy:
 2. On Windows launch-path spawn failures (`ENOENT`/`EINVAL`), retry with `.cmd` shim when applicable.
 3. If still failing on Windows, retry through `cmd /d /s /c <command ...>`.
 4. If all launch attempts fail, classify and report as launch failure (not capability/auth).
+
+If command is configured as an absolute path, skip shim/shell fallback chain.
 
 This behavior applies to runtime execution, setup wizard checks, and startup validation probes.
 
@@ -123,6 +130,18 @@ Required diagnostics fields:
 - `readOnlyModeEnforced`
 - `warnings` (when applicable)
 
+Additional diagnostics fields (when available):
+
+- `resolution.command`
+- `resolution.attemptSucceeded`
+- `resolution.resolvedPath`
+- `resolution.fallbacksAttempted`
+- `resolution.configuredCommand` (if env override is set)
+
+Security note:
+
+- Diagnostics must redact sensitive values from any configured args prefix before returning it.
+
 ## 6) Startup and Setup Contract
 
 Startup validation fails immediately when required conditions are missing:
@@ -134,7 +153,9 @@ Startup validation fails immediately when required conditions are missing:
 
 Setup wizard contract:
 
-- Two-step flow (not three-step):
+- Preflight check:
+  - verify `npx` is launchable in host runtime
+- Two-step core flow:
   - `[1/2]` Gemini CLI installation check
   - `[2/2]` invocation/auth check
 

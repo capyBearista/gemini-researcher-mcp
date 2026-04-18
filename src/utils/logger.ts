@@ -123,6 +123,13 @@ export function redactCommandArgs(args: string[]): string[] {
  */
 export class Logger {
   /**
+   * Sanitize a message using the centralized sensitive patterns
+   */
+  static sanitize(message: string): string {
+    return sanitize(message);
+  }
+
+  /**
    * Log an error message (always logged)
    */
   static error(message: string, ...args: unknown[]): void {

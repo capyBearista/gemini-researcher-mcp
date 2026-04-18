@@ -7,6 +7,8 @@
 import { WIZARD_MESSAGES, CLI, ERROR_MESSAGES } from "../constants.js";
 import {
   checkGeminiAuth,
+  getGeminiCommandConfig,
+  type GeminiCommandResolution,
   type GeminiAuthCheckResult,
   type GeminiCliCapabilityChecks,
   getGeminiCliCapabilityChecks,
@@ -15,7 +17,16 @@ import {
   isAuthRelatedErrorMessage,
   isAdminPolicyEnforced,
 } from "../utils/geminiExecutor.js";
-import { executeCommand, getCommandVersion, isCommandLaunchErrorMessage } from "../utils/commandExecutor.js";
+import { Logger } from "../utils/logger.js";
+import {
+  commandExists,
+  executeCommand,
+  executeCommandWithResolution,
+  CommandLaunchError,
+  getCommandVersion,
+  isCommandLaunchErrorMessage,
+  type CommandResolution,
+} from "../utils/commandExecutor.js";
 
 // ============================================================================
 // Types
@@ -28,6 +39,12 @@ export interface ValidationResult {
   isAuthError?: boolean;
   isAuthUnknown?: boolean;
   isLaunchError?: boolean;
+  resolution?: CommandResolution;
+}
+
+interface NpxAvailabilityCheck {
+  available: boolean;
+  reason?: string;
 }
 
 export interface GeminiInstallCheck {
@@ -44,6 +61,11 @@ interface ValidateEnvironmentDeps {
   checkGeminiAuthFn?: () => Promise<GeminiAuthCheckResult>;
 }
 
+export interface HostConfigSuggestion {
+  command: string;
+  args: string[];
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -53,19 +75,96 @@ interface ValidateEnvironmentDeps {
  */
 async function getGeminiPath(): Promise<string | null> {
   try {
-    const checkCommand = process.platform === "win32" ? CLI.COMMANDS.WHERE : CLI.COMMANDS.WHICH;
-    const result = await executeCommand(checkCommand, [CLI.COMMANDS.GEMINI]);
-    return result.split("\n")[0].trim();
+    const commandConfig = getGeminiCommandConfig();
+
+    if (await commandExists(commandConfig.command)) {
+      return commandConfig.command;
+    }
+
+    return null;
   } catch {
     return null;
   }
+}
+
+async function checkNpxAvailability(): Promise<NpxAvailabilityCheck> {
+  try {
+    await executeCommand("npx", ["--version"], undefined, { timeoutMs: 5000 });
+    return { available: true };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { available: false, reason };
+  }
+}
+
+
+function describeConfiguredCommand(): string {
+  const commandConfig = getGeminiCommandConfig();
+
+  if (!commandConfig.configuredCommand && !commandConfig.configuredArgsPrefix) {
+    return "gemini";
+  }
+
+  const parts = [commandConfig.command];
+  if (commandConfig.configuredArgsPrefix) {
+    parts.push(`(${Logger.sanitize(commandConfig.configuredArgsPrefix)})`);
+  }
+
+  return parts.join(" ");
+}
+
+export function buildWindowsShimSuggestion(
+  resolution: GeminiCommandResolution | null
+): HostConfigSuggestion | null {
+  if (!resolution) {
+    return null;
+  }
+
+  if (resolution.attemptSucceeded !== "cmd_shell") {
+    return null;
+  }
+
+  const configuredCommand = resolution.configuredCommand?.trim();
+  const preferredCommand = configuredCommand && configuredCommand.length > 0 ? configuredCommand : resolution.command;
+
+  if (preferredCommand.endsWith(".cmd") || preferredCommand.endsWith(".exe") || preferredCommand.endsWith(".bat")) {
+    return null;
+  }
+
+  return {
+    command: `${preferredCommand}.cmd`,
+    args: [],
+  };
+}
+
+function getWindowsShimSuggestionForTestResult(testResult: ValidationResult): HostConfigSuggestion | null {
+  if (testResult.resolution) {
+    return buildWindowsShimSuggestion(testResult.resolution);
+  }
+
+  return null;
+}
+
+function printWindowsShimSuggestion(suggestion: HostConfigSuggestion): void {
+  const payload = {
+    mcpServers: {
+      "gemini-researcher": {
+        command: suggestion.command,
+        ...(suggestion.args.length > 0 ? { args: suggestion.args } : {}),
+      },
+    },
+  };
+
+  console.log("\n  Suggested host config (copy into your MCP settings):");
+  console.log(JSON.stringify(payload, null, 2));
 }
 
 /**
  * Get the version of the gemini CLI
  */
 async function getGeminiVersion(): Promise<string | null> {
-  return getCommandVersion(CLI.COMMANDS.GEMINI);
+  const commandConfig = getGeminiCommandConfig();
+  return getCommandVersion(commandConfig.command);
 }
 
 // ============================================================================
@@ -139,6 +238,8 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
   }
 
   try {
+    const commandConfig = getGeminiCommandConfig();
+
     // Use longer timeout for Gemini CLI (takes time to boot and process)
     // Use an unambiguous prompt that won't trigger tool search or file analysis
     const args: string[] = [
@@ -154,7 +255,12 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
       args.splice(args.length - 2, 0, CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
     }
 
-    const output = await executeCommand(CLI.COMMANDS.GEMINI, args, undefined, { timeoutMs: 120000 });
+    const invocationArgs = [...commandConfig.argsPrefix, ...args];
+
+    const execution = await executeCommandWithResolution(commandConfig.command, invocationArgs, undefined, {
+      timeoutMs: 120000,
+    });
+    const output = execution.output;
 
     // Try to parse JSON output to verify it's working correctly
     try {
@@ -166,6 +272,7 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
     return {
       success: true,
       message: "Test invocation successful",
+      resolution: execution.resolution,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -181,6 +288,7 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
       isAuthError,
       isAuthUnknown,
       isLaunchError,
+      ...(error instanceof CommandLaunchError ? { resolution: error.resolution } : {}),
     };
   }
 }
@@ -196,8 +304,21 @@ export async function testGeminiInvocation(): Promise<ValidationResult> {
 export async function runSetupWizard(): Promise<boolean> {
   let hasErrors = false;
 
+
   // Print header
   console.log(WIZARD_MESSAGES.HEADER);
+
+  console.log(WIZARD_MESSAGES.STEP_NPX_CHECK);
+  const npxCheck = await checkNpxAvailability();
+  if (!npxCheck.available) {
+    console.log(WIZARD_MESSAGES.NPX_MISSING(npxCheck.reason || "Unknown reason"));
+    console.log("    If your MCP host is configured with command 'npx', startup may fail before reaching this server.");
+    console.log("    Ensure Node/npm is installed and that npx is launchable in your host runtime.");
+  } else {
+    console.log(WIZARD_MESSAGES.NPX_OK);
+  }
+
+  console.log();
 
   // Step 1: Check Gemini CLI installation
   console.log(WIZARD_MESSAGES.STEP_GEMINI_INSTALL);
@@ -224,6 +345,11 @@ export async function runSetupWizard(): Promise<boolean> {
 
     if (testResult.success) {
       console.log(WIZARD_MESSAGES.TEST_SUCCESS);
+
+      const shimSuggestion = getWindowsShimSuggestionForTestResult(testResult);
+      if (shimSuggestion) {
+        printWindowsShimSuggestion(shimSuggestion);
+      }
     } else {
       console.log(WIZARD_MESSAGES.TEST_FAILED(testResult.message || "Unknown error"));
       hasErrors = true;
@@ -237,6 +363,12 @@ export async function runSetupWizard(): Promise<boolean> {
       if (testResult.isLaunchError) {
         console.log("");
         console.log(ERROR_MESSAGES.GEMINI_CLI_LAUNCH_FAILED);
+        console.log(`  Active Gemini command: ${describeConfiguredCommand()}`);
+
+        const shimSuggestion = getWindowsShimSuggestionForTestResult(testResult);
+        if (shimSuggestion) {
+          printWindowsShimSuggestion(shimSuggestion);
+        }
       }
 
       if (testResult.isAuthUnknown) {

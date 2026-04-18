@@ -9,9 +9,12 @@ import { SYSTEM_PROMPT, MODEL_TIERS, CLI, ERROR_MESSAGES, STATUS_MESSAGES, MODEL
 import { Logger } from "./logger.js";
 import {
   executeCommand,
+  executeCommandWithResolution,
+  CommandLaunchError,
   commandExists,
   getCommandVersion,
   isCommandLaunchErrorMessage,
+  type CommandResolution,
 } from "./commandExecutor.js";
 import type { ProgressCallback } from "../types.js";
 import * as fs from "fs";
@@ -56,6 +59,8 @@ interface ModelTierConfig {
 
 const READ_ONLY_POLICY_FILE = "read-only-enforcement.toml";
 const ADMIN_POLICY_ENFORCEMENT_ENV = "GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY";
+const GEMINI_COMMAND_ENV = "GEMINI_RESEARCHER_GEMINI_COMMAND";
+const GEMINI_ARGS_PREFIX_ENV = "GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX";
 const ADMIN_POLICY_HELP_TIMEOUT_MS = 5000;
 const AUTH_PROBE_TIMEOUT_MS = 120000;
 const AUTH_PROBE_PROMPT = "Respond with exactly OK. Do not call any tools.";
@@ -70,6 +75,7 @@ export interface GeminiAuthCheckResult {
   method?: "api_key" | "google_login" | "vertex_ai";
   reason?: string;
   launchFailed?: boolean;
+  resolution?: GeminiCommandResolution;
 }
 
 export interface GeminiCliCapabilityChecks {
@@ -78,13 +84,123 @@ export interface GeminiCliCapabilityChecks {
   hasAdminPolicyFlag: boolean;
   supportsRequiredOutputFormats: boolean;
   outputFormatChoices: string[];
+  resolution?: GeminiCommandResolution;
   reason?: string;
+}
+
+export interface GeminiCommandConfig {
+  command: string;
+  argsPrefix: string[];
+  configuredCommand?: string;
+  configuredArgsPrefix?: string;
+}
+
+export interface GeminiCommandResolution extends CommandResolution {
+  configuredCommand?: string;
+  configuredArgsPrefix?: string;
 }
 
 type ExecuteCommandFn = typeof executeCommand;
 
 interface GeminiExecutorDeps {
   executeCommandFn?: ExecuteCommandFn;
+}
+
+function parseCommandArgsPrefix(input: string): string[] {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const tokens: string[] = [];
+  let current = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaping = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i];
+
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (inSingleQuote) {
+        current += char;
+        continue;
+      }
+
+      if (inDoubleQuote) {
+        const nextChar = trimmed[i + 1];
+        if (nextChar === "\\" || nextChar === '"') {
+          escaping = true;
+          continue;
+        }
+      }
+
+      current += char;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+
+    if (/\s/.test(char) && !inSingleQuote && !inDoubleQuote) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaping) {
+    current += "\\";
+  }
+
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
+export function getGeminiCommandConfig(): GeminiCommandConfig {
+  const configuredCommand = process.env[GEMINI_COMMAND_ENV]?.trim();
+  const configuredArgsPrefixRaw = process.env[GEMINI_ARGS_PREFIX_ENV]?.trim();
+
+  return {
+    command: configuredCommand && configuredCommand.length > 0 ? configuredCommand : CLI.COMMANDS.GEMINI,
+    argsPrefix: configuredArgsPrefixRaw ? parseCommandArgsPrefix(configuredArgsPrefixRaw) : [],
+    configuredCommand: configuredCommand && configuredCommand.length > 0 ? configuredCommand : undefined,
+    configuredArgsPrefix:
+      configuredArgsPrefixRaw && configuredArgsPrefixRaw.length > 0 ? configuredArgsPrefixRaw : undefined,
+  };
+}
+
+function buildGeminiCommandResolution(
+  resolution: CommandResolution,
+  commandConfig?: Pick<GeminiCommandConfig, "configuredCommand" | "configuredArgsPrefix">
+): GeminiCommandResolution {
+  const merged: GeminiCommandResolution = {
+    ...resolution,
+    ...(commandConfig?.configuredCommand && { configuredCommand: commandConfig.configuredCommand }),
+    ...(commandConfig?.configuredArgsPrefix && { configuredArgsPrefix: commandConfig.configuredArgsPrefix }),
+  };
+
+  return merged;
 }
 
 function getPoliciesDirectory(): string {
@@ -144,11 +260,25 @@ function extractOutputFormatChoices(helpText: string): string[] {
 
 export async function getGeminiCliCapabilityChecks(deps?: GeminiExecutorDeps): Promise<GeminiCliCapabilityChecks> {
   const runCommand = deps?.executeCommandFn ?? executeCommand;
+  const commandConfig = getGeminiCommandConfig();
+  const command = commandConfig.command;
+  const args = [...commandConfig.argsPrefix, CLI.FLAGS.HELP];
+  let capabilityResolution: GeminiCommandResolution | null = null;
 
   try {
-    const helpText = await runCommand(CLI.COMMANDS.GEMINI, [CLI.FLAGS.HELP], undefined, {
-      timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
-    });
+    let helpText: string;
+
+    if (deps?.executeCommandFn) {
+      helpText = await runCommand(command, args, undefined, {
+        timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
+      });
+    } else {
+      const execution = await executeCommandWithResolution(command, args, undefined, {
+        timeoutMs: ADMIN_POLICY_HELP_TIMEOUT_MS,
+      });
+      helpText = execution.output;
+      capabilityResolution = buildGeminiCommandResolution(execution.resolution, commandConfig);
+    }
 
     const hasAdminPolicyFlag = helpText.includes(CLI.FLAGS.ADMIN_POLICY);
     const outputFormatChoices = extractOutputFormatChoices(helpText);
@@ -161,15 +291,22 @@ export async function getGeminiCliCapabilityChecks(deps?: GeminiExecutorDeps): P
       hasAdminPolicyFlag,
       supportsRequiredOutputFormats,
       outputFormatChoices,
+      ...(capabilityResolution ? { resolution: capabilityResolution } : {}),
     };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
+
+    if (error instanceof CommandLaunchError) {
+      capabilityResolution = buildGeminiCommandResolution(error.resolution, commandConfig);
+    }
+
     return {
       probeSucceeded: false,
       launchFailed: isCommandLaunchErrorMessage(reason),
       hasAdminPolicyFlag: false,
       supportsRequiredOutputFormats: false,
       outputFormatChoices: [],
+      ...(capabilityResolution ? { resolution: capabilityResolution } : {}),
       reason,
     };
   }
@@ -362,7 +499,6 @@ export async function executeGeminiCLI(
   deps?: GeminiExecutorDeps
 ): Promise<GeminiResponse> {
   const startTime = Date.now();
-  const runCommand = deps?.executeCommandFn ?? executeCommand;
 
   // Prepend system prompt
   const finalPrompt = `${SYSTEM_PROMPT}\n\n---\n\nUSER REQUEST:\n${prompt}`;
@@ -381,6 +517,7 @@ export async function executeGeminiCLI(
 
     try {
       Logger.debug(`Attempting tier ${i + 1} with model: ${tierName}`);
+      const commandConfig = getGeminiCommandConfig();
 
       if (i > 0) {
         // Log fallback attempt
@@ -389,8 +526,15 @@ export async function executeGeminiCLI(
         onProgress?.(message + "\n");
       }
 
-      const args = buildGeminiArgs(finalPrompt, model);
-      const output = await runCommand(CLI.COMMANDS.GEMINI, args, onProgress);
+      const args = [...commandConfig.argsPrefix, ...buildGeminiArgs(finalPrompt, model)];
+      let output: string;
+
+      if (deps?.executeCommandFn) {
+        output = await deps.executeCommandFn(commandConfig.command, args, onProgress);
+      } else {
+        const execution = await executeCommandWithResolution(commandConfig.command, args, onProgress);
+        output = execution.output;
+      }
 
       // Parse the output
       const parsed = parseGeminiOutput(output);
@@ -413,6 +557,7 @@ export async function executeGeminiCLI(
         model: model ?? "auto",
       };
     } catch (error) {
+
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // Check if this is a quota error and we have more tiers to try
@@ -441,7 +586,8 @@ export async function executeGeminiCLI(
  * @returns true if gemini command exists on PATH
  */
 export async function isGeminiCLIInstalled(): Promise<boolean> {
-  return commandExists(CLI.COMMANDS.GEMINI);
+  const commandConfig = getGeminiCommandConfig();
+  return commandExists(commandConfig.command);
 }
 
 /**
@@ -450,7 +596,8 @@ export async function isGeminiCLIInstalled(): Promise<boolean> {
  * @returns Version string or null if not installed
  */
 export async function getGeminiVersion(): Promise<string | null> {
-  return getCommandVersion(CLI.COMMANDS.GEMINI);
+  const commandConfig = getGeminiCommandConfig();
+  return getCommandVersion(commandConfig.command);
 }
 
 /**
@@ -459,14 +606,9 @@ export async function getGeminiVersion(): Promise<string | null> {
  *
  * @returns Object with auth status
  */
-export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
-  configured: boolean;
-  status: AuthStatus;
-  method?: "api_key" | "google_login" | "vertex_ai";
-  reason?: string;
-  launchFailed?: boolean;
-}> {
+export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<GeminiAuthCheckResult> {
   const runCommand = deps?.executeCommandFn ?? executeCommand;
+  const commandConfig = getGeminiCommandConfig();
   // Check for API key
   if (process.env.GEMINI_API_KEY) {
     return { configured: true, status: "configured", method: "api_key" };
@@ -493,29 +635,45 @@ export async function checkGeminiAuth(deps?: GeminiExecutorDeps): Promise<{
     probeArgs.push(CLI.FLAGS.ADMIN_POLICY, getReadOnlyPolicyPath());
   }
 
+  let resolution: GeminiCommandResolution | undefined;
+
   try {
     probeArgs.push(CLI.FLAGS.PROMPT, AUTH_PROBE_PROMPT);
 
-    await runCommand(CLI.COMMANDS.GEMINI, probeArgs, undefined, {
-      timeoutMs: AUTH_PROBE_TIMEOUT_MS,
-    });
-    return { configured: true, status: "configured", method: "google_login" };
+    const invocationArgs = [...commandConfig.argsPrefix, ...probeArgs];
+
+    if (deps?.executeCommandFn) {
+      await runCommand(commandConfig.command, invocationArgs, undefined, {
+        timeoutMs: AUTH_PROBE_TIMEOUT_MS,
+      });
+    } else {
+      const execution = await executeCommandWithResolution(commandConfig.command, invocationArgs, undefined, {
+        timeoutMs: AUTH_PROBE_TIMEOUT_MS,
+      });
+      resolution = buildGeminiCommandResolution(execution.resolution, commandConfig);
+    }
+
+    return { configured: true, status: "configured", method: "google_login", ...(resolution ? { resolution } : {}) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    if (error instanceof CommandLaunchError) {
+      resolution = buildGeminiCommandResolution(error.resolution, commandConfig);
+    }
 
     const launchFailed = isCommandLaunchErrorMessage(message);
 
     if (launchFailed) {
-      return { configured: false, status: "unknown", reason: message, launchFailed: true };
+      return { configured: false, status: "unknown", reason: message, launchFailed: true, ...(resolution ? { resolution } : {}) };
     }
 
     const isAuthFailure = isAuthRelatedErrorMessage(message);
 
     if (isAuthFailure) {
-      return { configured: false, status: "unauthenticated", reason: message };
+      return { configured: false, status: "unauthenticated", reason: message, ...(resolution ? { resolution } : {}) };
     }
 
-    return { configured: false, status: "unknown", reason: message, launchFailed };
+    return { configured: false, status: "unknown", reason: message, launchFailed, ...(resolution ? { resolution } : {}) };
   }
 }
 

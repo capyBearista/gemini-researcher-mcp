@@ -40,6 +40,7 @@ Instead of copying entire files into your agent's context (burning tokens and cl
   - [Tools](#tools)
     - [Example workflows](#example-workflows)
   - [Docker](#docker)
+  - [Platform guides](#platform-guides)
   - [Troubleshooting (common issues)](#troubleshooting-common-issues)
   - [Contributing](#contributing)
   - [License](#license)
@@ -115,6 +116,7 @@ npx gemini-researcher init
 > [!NOTE]
 > On native Windows, some MCP hosts use shell-less process spawning and may not resolve npm command shims reliably (`npx`, `gemini`).
 > If startup fails with launch errors (`spawn ... ENOENT` / `GEMINI_CLI_LAUNCH_FAILED` despite working in PowerShell), prefer Docker or WSL for immediate reliability.
+> See the full remediation tree in [`docs/platforms/windows.md`](docs/platforms/windows.md).
 
 <details>
 <summary>VS Code</summary>
@@ -352,9 +354,26 @@ For MCP client configuration with Docker:
 > - Replace `/path/to/your/project` with your actual project path
 > - Replace `your-api-key` with your actual Gemini API key (this is required for Docker usage)
 
+## Platform guides
+
+- Native Windows launch model and remediation: [`docs/platforms/windows.md`](docs/platforms/windows.md)
+
 ## Troubleshooting (common issues)
+- Remediation decision tree:
+
+| Error / signal | Run this check first | Change this configuration next |
+|---|---|---|
+| `GEMINI_CLI_LAUNCH_FAILED` or `spawn ... ENOENT` | `gemini --help` and `npx --version` in the same terminal profile used by your MCP host | Prefer Docker or WSL config. If staying native, point host command to a stable shim/binary path and restart host. |
+| `health_check` warning: "resolves only through cmd /c fallback" | Run `health_check` with `includeDiagnostics: true` and inspect `diagnostics.resolution` | Update host config to launch the reported `.cmd` shim directly instead of relying on `cmd /c` fallback. |
+| MCP host cannot launch server via `npx` | `npx --version` | Change host server command from `npx gemini-researcher` to installed binary path (or Docker transport). |
+| `ADMIN_POLICY_UNSUPPORTED` / output format unsupported | `gemini --help` and confirm `--admin-policy`, `json`, `stream-json` | Upgrade Gemini CLI to v0.36.0+ |
+| `AUTH_MISSING` / `AUTH_UNKNOWN` | `gemini` interactive login and rerun `health_check` | Authenticate Gemini CLI or set `GEMINI_API_KEY` |
+
 - `GEMINI_CLI_NOT_FOUND`: Install Gemini CLI: `npm install -g @google/gemini-cli`
 - `GEMINI_CLI_LAUNCH_FAILED`: This is a launch-path issue, not an auth/capability issue. On Windows, command shims can fail in shell-less spawn contexts. Validate `gemini --help` and `npx --version` interactively, then prefer Docker or WSL if host launch mode is strict.
+- `GEMINI_RESEARCHER_GEMINI_COMMAND`: Override the Gemini command name/path used by the server (for wrappers or pinned binary locations).
+- `GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX`: Prefix extra Gemini args for every invocation (for example `--config <file>`).
+- `health_check` diagnostics redact sensitive token-like values in configured args prefix output.
 - `AUTH_MISSING`: Run `gemini`, and authenticate or set `GEMINI_API_KEY`
 - `AUTH_UNKNOWN`: Auth could not be confirmed (often network/CLI probe failure). If launch errors are present, fix launch-path first; otherwise verify `gemini` works interactively, then retry.
 - `ADMIN_POLICY_MISSING`: Reinstall package or verify `policies/read-only-enforcement.toml` exists in installed package.

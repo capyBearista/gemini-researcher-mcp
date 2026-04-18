@@ -4,6 +4,9 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import {
   executeGeminiCLI,
   checkGeminiAuth,
@@ -12,6 +15,7 @@ import {
   isAuthRelatedErrorMessage,
   getGeminiCliCapabilityChecks,
   supportsRequiredOutputFormats,
+  getGeminiCommandConfig,
 } from "../../src/utils/geminiExecutor.js";
 import { MODELS } from "../../src/constants.js";
 
@@ -28,6 +32,8 @@ function getExpectedPromptSuffix(prompt: string): string {
 describe("geminiExecutor CLI contract", () => {
   beforeEach(() => {
     delete process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY;
+    delete process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+    delete process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     delete process.env.VERTEX_AI_PROJECT;
@@ -160,11 +166,52 @@ describe("geminiExecutor CLI contract", () => {
 
     assert.strictEqual(calls.length, 1);
   });
+
+  it("uses GEMINI_RESEARCHER_GEMINI_COMMAND override for all invocations", async () => {
+    process.env.GEMINI_RESEARCHER_GEMINI_COMMAND = "my-gemini-wrapper";
+
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok" });
+    };
+
+    await executeGeminiCLI("Analyze auth flow", "quick_query", undefined, {
+      executeCommandFn: mockExecuteCommand,
+    });
+
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].command, "my-gemini-wrapper");
+  });
+
+  it("prepends GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX before generated args", async () => {
+    process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX = '--config "C:/Program Files/Gemini/config.json" --sandbox';
+
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok", usage: { totalTokens: 1 }, toolCalls: 0 });
+    };
+
+    await executeGeminiCLI("Analyze args", "quick_query", undefined, {
+      executeCommandFn: mockExecuteCommand,
+    });
+
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].args.slice(0, 3), [
+      "--config",
+      "C:/Program Files/Gemini/config.json",
+      "--sandbox",
+    ]);
+    assert.ok(calls[0].args.includes("-p"));
+  });
 });
 
 describe("checkGeminiAuth behavior", () => {
   beforeEach(() => {
     delete process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY;
+    delete process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+    delete process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     delete process.env.VERTEX_AI_PROJECT;
@@ -222,6 +269,23 @@ describe("checkGeminiAuth behavior", () => {
     assert.ok(promptFlagIndex > -1);
     assert.strictEqual(calls[0].args[promptFlagIndex + 1], "Respond with exactly OK. Do not call any tools.");
     assert.deepStrictEqual(auth, { configured: true, status: "configured", method: "google_login" });
+  });
+
+  it("uses command override and args prefix for auth probe", async () => {
+    process.env.GEMINI_RESEARCHER_GEMINI_COMMAND = "custom-gemini";
+    process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX = "--config custom.toml";
+
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const mockExecuteCommand: ExecuteCommandMock = async (command, args) => {
+      calls.push({ command, args: [...args] });
+      return JSON.stringify({ response: "ok" });
+    };
+
+    const auth = await checkGeminiAuth({ executeCommandFn: mockExecuteCommand });
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].command, "custom-gemini");
+    assert.deepStrictEqual(calls[0].args.slice(0, 2), ["--config", "custom.toml"]);
+    assert.strictEqual(auth.status, "configured");
   });
 
   it("omits admin policy in auth probe when enforcement disabled", async () => {
@@ -336,6 +400,51 @@ Options:
     assert.ok(checks.reason?.includes("Command launch failed"));
   });
 
+  it("surfaces resolution metadata when help probe fallback succeeds", async () => {
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gemini-help-fallback-"));
+    const commandBase = path.join(tempDir, "gemini-help");
+    const commandShim = `${commandBase}.cmd`;
+
+    fs.writeFileSync(
+      commandShim,
+      [
+        "#!/usr/bin/env node",
+        'process.stdout.write(\'Options:\\n  --output-format [choices: "text", "json", "stream-json"]\\n  --admin-policy <path>\\n\');',
+        "",
+      ].join("\n"),
+      { encoding: "utf-8", mode: 0o755 }
+    );
+    fs.chmodSync(commandShim, 0o755);
+
+    const relativeCommand = path.relative(process.cwd(), commandBase).split(path.sep).join("/");
+    const originalCommand = process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+    const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+
+    process.env.GEMINI_RESEARCHER_GEMINI_COMMAND = relativeCommand;
+    Object.defineProperty(process, "platform", { value: "win32" });
+
+    try {
+      const checks = await getGeminiCliCapabilityChecks();
+      assert.strictEqual(checks.probeSucceeded, true);
+      assert.strictEqual(checks.resolution?.attemptSucceeded, "cmd_shim");
+      assert.deepStrictEqual(checks.resolution?.fallbacksAttempted, ["direct", "cmd_shim"]);
+
+    } finally {
+      if (originalPlatformDescriptor) {
+        Object.defineProperty(process, "platform", originalPlatformDescriptor);
+      }
+
+      if (originalCommand !== undefined) {
+        process.env.GEMINI_RESEARCHER_GEMINI_COMMAND = originalCommand;
+      } else {
+        delete process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+      }
+
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("marks probe as failed (not unsupported) when help command fails ambiguously", async () => {
     const mockExecuteCommand: ExecuteCommandMock = async () => {
       throw new Error("Temporary network failure");
@@ -371,5 +480,36 @@ describe("admin policy enforcement toggle", () => {
 
     process.env.GEMINI_RESEARCHER_ENFORCE_ADMIN_POLICY = "true";
     assert.strictEqual(isAdminPolicyEnforced(), true);
+  });
+});
+
+describe("gemini command config", () => {
+  beforeEach(() => {
+    delete process.env.GEMINI_RESEARCHER_GEMINI_COMMAND;
+    delete process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX;
+  });
+
+  it("defaults to gemini command with no args prefix", () => {
+    const config = getGeminiCommandConfig();
+    assert.strictEqual(config.command, "gemini");
+    assert.deepStrictEqual(config.argsPrefix, []);
+  });
+
+  it("parses args prefix with quotes and spacing", () => {
+    process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX = '--config "C:/Program Files/Gemini/config.toml" --sandbox';
+    const config = getGeminiCommandConfig();
+
+    assert.deepStrictEqual(config.argsPrefix, [
+      "--config",
+      "C:/Program Files/Gemini/config.toml",
+      "--sandbox",
+    ]);
+  });
+
+  it("preserves Windows backslashes in args prefix", () => {
+    process.env.GEMINI_RESEARCHER_GEMINI_ARGS_PREFIX = "--config C:\\tools\\gemini.toml --flag";
+    const config = getGeminiCommandConfig();
+
+    assert.deepStrictEqual(config.argsPrefix, ["--config", "C:\\tools\\gemini.toml", "--flag"]);
   });
 });
